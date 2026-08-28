@@ -37,7 +37,6 @@ from asistente_ia import asistente_ia_router
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 app = FastAPI(title="ERP Agencia de Viajes")
-app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32), same_site="strict", https_only=False)
 
 # ── Cabeceras de seguridad HTTP ───────────────────────────────────────────────
 @app.middleware("http")
@@ -48,6 +47,28 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
+
+# ── Candado real de cambio de contraseña forzado ──────────────────────────────
+# El login solo hacía un redirect de una sola vez a /cambiar-password — nada
+# impedía navegar a otra pantalla en su lugar y quedarte con la contraseña
+# vieja/temporal. Este middleware bloquea CUALQUIER otra ruta mientras la
+# sesión tenga la bandera activa (se marca en /login, se limpia al cambiar
+# la contraseña con éxito en /cambiar-password).
+_RUTAS_PERMITIDAS_FORZAR_PWD = {"/cambiar-password", "/logout"}
+
+@app.middleware("http")
+async def forzar_cambio_password(request: Request, call_next):
+    if (request.session.get("forzar_cambio_pwd")
+            and request.url.path not in _RUTAS_PERMITIDAS_FORZAR_PWD
+            and not request.url.path.startswith("/static")):
+        return RedirectResponse(url="/cambiar-password")
+    return await call_next(request)
+
+# Se agrega AL FINAL a propósito: en Starlette, cada add_middleware()/@app.middleware
+# envuelve a los anteriores, así que el último en registrarse queda como la capa
+# más externa y corre primero — necesitamos que SessionMiddleware llene
+# request.session ANTES de que los middlewares de arriba intenten leerlo.
+app.add_middleware(SessionMiddleware, secret_key=secrets.token_hex(32), same_site="strict", https_only=False)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 # cache_size=0: workaround para bug de Jinja2 3.1.6 con Python 3.14
@@ -241,6 +262,7 @@ async def login(request: Request, usuario: str = Form(...), password: str = Form
             _dias_pwd = 0
             if not df_pl.empty:
                 if int(df_pl.iloc[0]["primer_login"] or 0) == 1:
+                    request.session["forzar_cambio_pwd"] = True
                     request.session["flash"] = {"tipo": "error", "texto": "🔑 Debes crear una nueva contraseña antes de continuar."}
                     return RedirectResponse(url="/cambiar-password", status_code=303)
                 _ult_pwd = df_pl.iloc[0]["ultima_cambio_password"]
@@ -251,6 +273,7 @@ async def login(request: Request, usuario: str = Form(...), password: str = Form
                     except Exception:
                         _dias_pwd = 0
             if _dias_pwd >= 60:
+                request.session["forzar_cambio_pwd"] = True
                 request.session["flash"] = {"tipo": "error", "texto": f"🔑 Tu contraseña lleva {_dias_pwd} días sin cambiar (límite 60). Actualízala para continuar."}
                 return RedirectResponse(url="/cambiar-password", status_code=303)
 
@@ -4848,6 +4871,7 @@ async def cambiar_password_post(request: Request):
         (h, str(now_local().date()), yo)
     )
     guardar_historial_password(yo, h)
+    request.session["forzar_cambio_pwd"] = False
     request.session["flash"] = {"tipo": "ok", "texto": "✅ Contraseña actualizada correctamente."}
     return RedirectResponse(url="/dashboard", status_code=303)
 
