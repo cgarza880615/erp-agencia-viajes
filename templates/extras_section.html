@@ -1,0 +1,181 @@
+<div id="seccion-extras">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">⚙️ Suplementos / Extras</div>
+  <div class="card-body" style="padding-bottom:0;">
+
+    {% if extras %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr><th>Descripción</th><th>Cobro cliente</th><th>Costo prov.</th><th>Fecha</th><th>Tipo</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for e in extras %}
+        <tr>
+          <td>{{ e.descripcion }}</td>
+          <td class="money money-positive">{{ e.monto_cobrado_cliente | moneda(moneda) }}</td>
+          <td class="money {% if e.monto_costo_proveedor > e.monto_cobrado_cliente %}money-negative{% endif %}">
+            {{ e.monto_costo_proveedor | moneda(moneda) }}
+          </td>
+          <td>{{ e.fecha_registro or '—' }}</td>
+          <td>
+            {% if e.tipo_registro == 'PAGADO_MOMENTO' %}
+              <span class="badge badge-green">Al momento</span>
+            {% else %}
+              <span class="badge badge-blue">Al plan</span>
+            {% endif %}
+          </td>
+          <td>
+            <button type="button" class="btn-icon-danger"
+                    onclick="abrirAnularExtra({{ e.id_extra }}, '{{ e.descripcion | replace("'","\'") }}')">✕</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin suplementos registrados.</p>
+    {% endif %}
+
+    <!-- Formulario agregar extra -->
+    {% if not reserva_activa %}
+    <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">
+      ℹ️ Esta reserva no está ACTIVA — no se pueden agregar nuevos suplementos extras.
+    </p>
+    {% else %}
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
+        + Agregar suplemento / extra
+      </summary>
+      <form method="post" action="/bitacora/{{ id_reserva }}/extras/agregar"
+            hx-post="/bitacora/{{ id_reserva }}/extras/agregar"
+            hx-target="#seccion-extras" hx-swap="outerHTML"
+            id="form-extra-{{ id_reserva }}"
+            style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field" style="grid-column:span 2;">
+            <label class="field-label">Descripción / Motivo del cargo *</label>
+            <input class="field-input" type="text" name="descripcion" required placeholder="Ej: Upgrade de habitación">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Cobro al cliente ({{ moneda }})</label>
+            <input class="field-input field-money" type="number" name="monto_cobrado_cliente"
+                   min="0" step="0.01" value="0" id="extra-cobro-{{ id_reserva }}"
+                   oninput="extraValidar({{ id_reserva }})">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Costo proveedor ({{ moneda }})</label>
+            <input class="field-input field-money" type="number" name="monto_costo_proveedor"
+                   min="0" step="0.01" value="0" id="extra-costo-{{ id_reserva }}"
+                   oninput="extraValidar({{ id_reserva }})">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Fecha</label>
+            <input class="field-input" type="date" name="fecha_registro" value="{{ today }}">
+          </div>
+          <div class="form-field">
+            <label class="field-label">¿Cómo registrar?</label>
+            <select name="tipo_registro" class="field-select" id="extra-tipo-{{ id_reserva }}"
+                    onchange="extraTipo({{ id_reserva }}, this.value)">
+              <option value="PAGADO_MOMENTO">💵 Pagado al momento</option>
+              <option value="PLAN_PAGOS" {% if not puede_diferir_plan %}disabled title="No hay parcialidades pendientes"{% endif %}>
+                📆 Agregar al plan de pagos
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Campos de método / comisión (solo para PAGADO_MOMENTO) -->
+        <div id="extra-metodo-wrap-{{ id_reserva }}" class="form-grid" style="margin-top:10px;">
+          <div class="form-field">
+            <label class="field-label">Método de pago</label>
+            <select name="metodo_pago" class="field-select" id="extra-metodo-{{ id_reserva }}"
+                    onchange="extraComision({{ id_reserva }}, this.value)">
+              <option value="Transferencia">Transferencia</option>
+              <option value="Efectivo">Efectivo</option>
+              <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
+            </select>
+          </div>
+          <div class="form-field" id="extra-com-wrap-{{ id_reserva }}" style="display:none;">
+            <label class="field-label">% Comisión tarjeta</label>
+            <input class="field-input" type="number" name="comision_pct" min="0" max="10" step="0.1" value="3.5">
+          </div>
+        </div>
+
+        <!-- Aviso si no hay parcialidades (plan bloqueado) -->
+        {% if not hay_parcialidades_pendientes and not modo_libre %}
+        <p style="font-size:0.78rem; color:var(--warning); margin:6px 0 0;">
+          ⚠️ No hay parcialidades pendientes — el extra solo puede registrarse "Al momento".
+        </p>
+        {% elif modo_libre %}
+        <p style="font-size:0.78rem; color:var(--info); margin:6px 0 0;">
+          ℹ️ Esta reserva no tiene plan de parcialidades (Abono Libre). El extra se sumará al saldo pendiente total.
+        </p>
+        {% endif %}
+
+        <!-- Indicador costo > cobro -->
+        <div id="extra-alerta-{{ id_reserva }}" style="display:none; margin-top:8px;"></div>
+
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Guardar extra</button>
+        </div>
+      </form>
+    </details>
+    {% endif %}
+
+  </div>
+</div>
+
+<!-- Modal anular extra -->
+<div id="modal-extra-{{ id_reserva }}" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:28px 32px; width:400px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <h3 style="margin:0 0 4px; color:var(--danger); font-size:1rem;">⚠️ Anular suplemento</h3>
+    <p id="modal-extra-desc-{{ id_reserva }}" style="font-size:0.85rem; color:var(--text2); margin:0 0 16px;"></p>
+    <form id="form-anular-extra-{{ id_reserva }}"
+          method="post" action="#"
+          hx-target="#seccion-extras" hx-swap="outerHTML">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="field-label">Motivo de anulación *</label>
+        <input class="field-input" type="text" name="motivo" required placeholder="Ej: Error de captura">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary" style="background:var(--danger); font-size:0.875rem;">Anular</button>
+        <button type="button" class="btn btn-outline" style="font-size:0.875rem;"
+                onclick="document.getElementById('modal-extra-{{ id_reserva }}').style.display='none'">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+</div>
+
+<script>
+function extraValidar(rid) {
+  const cobro = parseFloat(document.getElementById('extra-cobro-' + rid)?.value) || 0;
+  const costo = parseFloat(document.getElementById('extra-costo-' + rid)?.value) || 0;
+  const div   = document.getElementById('extra-alerta-' + rid);
+  if (costo > cobro && cobro > 0) {
+    div.style.display = 'block';
+    div.style.cssText = 'display:block; padding:8px 12px; border-radius:6px; font-size:0.8rem; background:rgba(217,119,6,0.08); border:1px solid var(--warning); color:var(--warning); margin-top:8px;';
+    div.innerHTML = '⚠️ El costo del proveedor ($' + costo.toLocaleString('es-MX') + ') supera el cobro al cliente ($' + cobro.toLocaleString('es-MX') + '). Se registrará con pérdida.';
+  } else {
+    div.style.display = 'none';
+  }
+}
+function extraTipo(rid, val) {
+  const wrap = document.getElementById('extra-metodo-wrap-' + rid);
+  wrap.style.display = (val === 'PAGADO_MOMENTO') ? '' : 'none';
+}
+function extraComision(rid, val) {
+  document.getElementById('extra-com-wrap-' + rid).style.display = (val === 'Tarjeta de Crédito/Débito') ? '' : 'none';
+}
+function abrirAnularExtra(idExtra, desc) {
+  const rid  = {{ id_reserva }};
+  const modal = document.getElementById('modal-extra-' + rid);
+  const form  = document.getElementById('form-anular-extra-' + rid);
+  document.getElementById('modal-extra-desc-' + rid).textContent = desc;
+  const url = `/bitacora/${rid}/extras/${idExtra}/anular`;
+  form.setAttribute('hx-post', url);
+  form.setAttribute('action', url);
+  htmx.process(form);
+  modal.style.display = 'flex';
+}
+</script>

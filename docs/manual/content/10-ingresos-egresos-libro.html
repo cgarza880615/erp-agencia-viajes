@@ -1,0 +1,44 @@
+<div class="crumb"><a href="index.html">Manual</a> / Ingresos, Egresos y Libro Diario</div>
+<div class="eyebrow">Módulo 10</div>
+<h1>📒 Ingresos, Egresos y Libro Diario</h1>
+<p class="lede">Todo el dinero que <strong>no</strong> es un abono de un cliente por su viaje: capital de las socias, gastos de oficina, y el libro contable que junta absolutamente todo.</p>
+
+<h2>Ingresos de Oficina</h2>
+<div class="callout note">
+  <strong>Nota</strong>
+  Los abonos que pagan los clientes por su viaje <strong>no se registran aquí</strong> — esos se capturan dentro del itinerario correspondiente (ver <a href="06-itinerarios-cobros-pagos.html">Cobros y Pagos</a>) y se consolidan solos en el Libro Diario.
+</div>
+
+<h2>Egresos de Oficina</h2>
+<p>Para renta, luz, sueldos, marketing y cualquier gasto operativo que no sea el costo directo de un viaje. El campo <strong>"Dividir entre"</strong> deja anotar quién absorbe el gasto (ej. "Todos los socios", "Fulano de Tal") — es solo informativo, no afecta los cálculos.</p>
+
+<h2>Libro Diario</h2>
+<p>Es la fuente de verdad contable: junta cobros de clientes, pagos a proveedores, ingresos y egresos de oficina — todo en una sola tabla filtrable.</p>
+
+<table class="field-ref">
+  <tr><th>Filtro</th><th>Para qué sirve</th></tr>
+  <tr><td>Período (Hoy/Semana/Mes/Año/Todo)</td><td>Acota el rango de fechas rápido.</td></tr>
+  <tr><td>Operadora</td><td>Ver solo lo que registró una persona del equipo.</td></tr>
+  <tr><td>Método de pago</td><td>Ej. ver solo lo cobrado por Transferencia.</td></tr>
+  <tr><td>Estado</td><td>Solo activos, o incluir también los anulados.</td></tr>
+</table>
+
+<div class="callout warning">
+  <strong>Anular un movimiento desde aquí</strong>
+  Solo se pueden anular movimientos <strong>sin itinerario ligado</strong> (columna Reserva vacía). Si el movimiento pertenece a un itinerario, hay que anularlo desde el detalle de ese itinerario — así el plan de pagos y los saldos se actualizan correctamente en automático.
+</div>
+
+<div class="callout tip">
+  <strong>Retenido de Clientes sin Aplicar</strong>
+  La tarjeta naranja de arriba es un snapshot a hoy — no depende del período que estés filtrando. Es el total, en todos los itinerarios activos, de dinero que ya se cobró pero todavía no se le ha pagado a ningún proveedor.
+</div>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>Necesito anular un movimiento del Libro Diario pero no me deja, ¿por qué?</summary>
+  <p class="faq-body">Solo se pueden anular desde aquí los movimientos SIN itinerario ligado (columna Reserva vacía) — por ejemplo un ingreso u egreso de oficina. Si el movimiento pertenece a un itinerario (un cobro o un pago a proveedor), hay que anularlo desde el detalle de ese itinerario, para que el saldo y el plan de pagos se actualicen bien.</p>
+</details>
+<details class="faq">
+  <summary>¿Dónde registro el abono que me dio un cliente por su viaje?</summary>
+  <p class="faq-body">No se registra en Ingresos ni en Egresos de Oficina — eso es solo para capital/gastos de la agencia. Los abonos de clientes se capturan dentro del itinerario correspondiente, en su sección de Cobros.</p>
+</details>

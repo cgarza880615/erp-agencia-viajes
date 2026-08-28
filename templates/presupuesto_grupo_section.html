@@ -1,0 +1,118 @@
+<div id="seccion-presupuesto-grupo">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">💰 Presupuesto del Grupo</div>
+  <div class="card-body" style="padding-bottom:0;">
+    <p style="color:var(--text2); font-size:0.8rem; margin:0 0 12px;">
+      Una línea por categoría de gasto (Vuelos, Hotel, TUA, Traslados, Tours, Publicidad, Guías, Propinas, Otro). El costo total del bloque es fijo — no baja aunque se venda menos del cupo.
+    </p>
+
+    {% if lineas %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr><th>Categoría</th><th>Descripción</th><th>Presupuestado</th><th>Pagado</th><th>Pendiente</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for l in lineas %}
+        <tr>
+          <td>{{ l.categoria }}</td>
+          <td>{{ l.descripcion or '—' }}</td>
+          <td class="money">{{ l.monto_presupuestado | moneda }}</td>
+          <td class="money">{{ l.pagado | moneda }}</td>
+          <td class="money {% if l.pendiente <= 0.01 %}money-positive{% endif %}">{{ l.pendiente | moneda }}</td>
+          <td>
+            <button type="button" style="background:transparent; border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer;" onclick="abrirEditarPresupuesto({{ l.id_presupuesto }}, '{{ l.categoria }}', '{{ (l.descripcion or '') | replace("'", "\\'") }}', {{ l.monto_presupuestado }}, {{ 'true' if l.tiene_pagos else 'false' }})">✏️</button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin líneas de presupuesto todavía.</p>
+    {% endif %}
+
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
+        + Agregar línea de presupuesto
+      </summary>
+      <form method="post" action="/grupos/{{ id_grupo }}/presupuesto/agregar"
+            hx-post="/grupos/{{ id_grupo }}/presupuesto/agregar"
+            hx-target="#seccion-presupuesto-grupo" hx-swap="outerHTML" style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Categoría</label>
+            <select class="field-select" name="categoria">
+              {% for c in categorias %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-field" style="grid-column:span 2;">
+            <label class="field-label">Descripción (opcional)</label>
+            <input class="field-input" type="text" name="descripcion">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Monto ($)</label>
+            <input class="field-input field-money" type="number" name="monto_presupuestado" min="0" step="0.01" required>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Agregar</button>
+        </div>
+      </form>
+    </details>
+  </div>
+</div>
+</div>
+
+<!-- Modal editar/eliminar línea de presupuesto -->
+<div id="modal-presupuesto" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:28px 32px; width:420px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <h3 style="margin:0 0 16px; font-size:1rem;">✏️ Editar línea de presupuesto</h3>
+    <form id="form-editar-presupuesto" method="post" action="#" hx-target="#seccion-presupuesto-grupo" hx-swap="outerHTML">
+      <div class="form-field">
+        <label class="field-label">Categoría</label>
+        <select class="field-select" name="categoria" id="pres-categoria">
+          {% for c in categorias %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Descripción</label>
+        <input class="field-input" type="text" name="descripcion" id="pres-descripcion">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Monto presupuestado ($)</label>
+        <input class="field-input field-money" type="number" name="monto_presupuestado" id="pres-monto" min="0" step="0.01">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Guardar</button>
+        <button type="button" class="btn btn-outline" style="font-size:0.875rem;" onclick="document.getElementById('modal-presupuesto').style.display='none'">Cancelar</button>
+      </div>
+      <p id="pres-aviso-pagos" style="display:none; font-size:0.78rem; color:var(--text2); margin-top:10px;">
+        ℹ️ Esta línea ya tiene pagos registrados — no se puede eliminar, solo editar.
+      </p>
+      <button type="button" id="btn-eliminar-presupuesto" class="btn-icon-danger" style="margin-top:10px; font-size:0.8rem;" onclick="eliminarPresupuesto()">🗑️ Eliminar línea</button>
+    </form>
+  </div>
+</div>
+
+<script>
+let _idGrupoPresupuesto = {{ id_grupo }};
+function abrirEditarPresupuesto(idPresupuesto, categoria, descripcion, monto, tienePagos) {
+  document.getElementById('pres-categoria').value = categoria;
+  document.getElementById('pres-descripcion').value = descripcion;
+  document.getElementById('pres-monto').value = monto;
+  const form = document.getElementById('form-editar-presupuesto');
+  const url = `/grupos/${_idGrupoPresupuesto}/presupuesto/${idPresupuesto}/editar`;
+  form.setAttribute('hx-post', url);
+  form.setAttribute('action', url);
+  form.dataset.idPresupuesto = idPresupuesto;
+  htmx.process(form);
+  document.getElementById('btn-eliminar-presupuesto').style.display = tienePagos ? 'none' : '';
+  document.getElementById('pres-aviso-pagos').style.display = tienePagos ? 'block' : 'none';
+  document.getElementById('modal-presupuesto').style.display = 'flex';
+}
+function eliminarPresupuesto() {
+  const idPresupuesto = document.getElementById('form-editar-presupuesto').dataset.idPresupuesto;
+  const url = `/grupos/${_idGrupoPresupuesto}/presupuesto/${idPresupuesto}/eliminar`;
+  htmx.ajax('POST', url, {target: '#seccion-presupuesto-grupo', swap: 'outerHTML'});
+  document.getElementById('modal-presupuesto').style.display = 'none';
+}
+</script>

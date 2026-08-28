@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp Admin | Agencia{% endblock %}
+
+{% block content %}
+<div style="max-width:900px; margin:0 auto; padding:20px;">
+
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+    <a href="/admin" style="color:#888; font-size:0.85rem; text-decoration:none;">← Admin</a>
+    <h1 style="margin:0; font-size:1.3rem; font-weight:700; color:#1a1a2e;">💬 Configuración WhatsApp</h1>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+    <!-- ── Etapas del funnel ── -->
+    <div class="card" style="background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.07); padding:20px;">
+      <h2 style="margin:0 0 16px; font-size:1rem; font-weight:700; color:#1a1a2e;">
+        🎯 Etapas del Funnel
+      </h2>
+
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f5f6fa;">
+            <th style="padding:6px 8px; text-align:left;">Etapa</th>
+            <th style="padding:6px 8px; text-align:center;">Color</th>
+            <th style="padding:6px 8px; text-align:center;">Orden</th>
+            <th style="padding:6px 8px; text-align:center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in etapas %}
+          <tr style="border-top:1px solid #f0f0f0; {% if not e.activo %}opacity:0.45;{% endif %}">
+            <td style="padding:7px 8px;">
+              <span style="background:{{ e.color }}22; color:{{ e.color }}; border:1px solid {{ e.color }}44;
+                           padding:2px 8px; border-radius:10px; font-weight:600;">
+                {{ e.emoji }} {{ e.nombre }}
+              </span>
+            </td>
+            <td style="padding:7px 8px; text-align:center;">
+              <span style="display:inline-block; width:18px; height:18px; border-radius:50%;
+                           background:{{ e.color }}; border:1px solid #ddd;"></span>
+            </td>
+            <td style="padding:7px 8px; text-align:center; color:#888;">{{ e.orden }}</td>
+            <td style="padding:7px 8px; text-align:center;">
+              <form method="post" action="/admin/wa/etapas/{{ e.id }}/toggle" style="display:inline;">
+                <button type="submit" style="font-size:0.72rem; padding:2px 8px; border-radius:4px;
+                  border:1px solid #ddd; background:#fff; cursor:pointer;">
+                  {% if e.activo %}Desactivar{% else %}Activar{% endif %}
+                </button>
+              </form>
+              <form method="post" action="/admin/wa/etapas/{{ e.id }}/eliminar" style="display:inline;"
+                    onsubmit="return confirm('¿Eliminar etapa {{ e.nombre }}?')">
+                <button type="submit" style="font-size:0.72rem; padding:2px 8px; border-radius:4px;
+                  border:1px solid #ef4444; color:#ef4444; background:#fff; cursor:pointer;">
+                  Eliminar
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <details style="background:#f9f9f9; border-radius:8px; padding:12px;">
+        <summary style="cursor:pointer; font-size:0.82rem; font-weight:600; color:#0047ab;">
+          + Nueva etapa
+        </summary>
+        <form method="post" action="/admin/wa/etapas/nueva"
+              style="display:grid; gap:8px; margin-top:12px;">
+          <div style="display:grid; grid-template-columns:1fr 60px; gap:8px;">
+            <input name="nombre" placeholder="Nombre de la etapa" required
+                   style="padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+            <input name="emoji" placeholder="🎯" maxlength="4"
+                   style="padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem; text-align:center;">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 80px; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:0.78rem; color:#666;">Color:</label>
+              <input type="color" name="color" value="#6b7280"
+                     style="width:40px; height:28px; border:1px solid #ddd; border-radius:4px; cursor:pointer;">
+            </div>
+            <input type="number" name="orden" placeholder="Orden" value="0"
+                   style="padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          </div>
+          <button type="submit" style="padding:7px; background:#0047ab; color:#fff;
+                  border:none; border-radius:6px; font-size:0.82rem; cursor:pointer;">
+            Agregar etapa
+          </button>
+        </form>
+      </details>
+    </div>
+
+    <!-- ── Etiquetas ── -->
+    <div class="card" style="background:#fff; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.07); padding:20px;">
+      <h2 style="margin:0 0 16px; font-size:1rem; font-weight:700; color:#1a1a2e;">
+        🏷️ Etiquetas
+      </h2>
+
+      <table style="width:100%; border-collapse:collapse; font-size:0.82rem; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f5f6fa;">
+            <th style="padding:6px 8px; text-align:left;">Etiqueta</th>
+            <th style="padding:6px 8px; text-align:center;">Orden</th>
+            <th style="padding:6px 8px; text-align:center;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in etiquetas %}
+          <tr style="border-top:1px solid #f0f0f0; {% if not e.activo %}opacity:0.45;{% endif %}">
+            <td style="padding:7px 8px;">
+              <span style="background:{{ e.color }}; color:#fff;
+                           padding:2px 10px; border-radius:10px; font-weight:600; font-size:0.78rem;">
+                {{ e.nombre }}
+              </span>
+            </td>
+            <td style="padding:7px 8px; text-align:center; color:#888;">{{ e.orden }}</td>
+            <td style="padding:7px 8px; text-align:center;">
+              <form method="post" action="/admin/wa/etiquetas/{{ e.id }}/toggle" style="display:inline;">
+                <button type="submit" style="font-size:0.72rem; padding:2px 8px; border-radius:4px;
+                  border:1px solid #ddd; background:#fff; cursor:pointer;">
+                  {% if e.activo %}Desactivar{% else %}Activar{% endif %}
+                </button>
+              </form>
+              <form method="post" action="/admin/wa/etiquetas/{{ e.id }}/eliminar" style="display:inline;"
+                    onsubmit="return confirm('¿Eliminar etiqueta {{ e.nombre }}?')">
+                <button type="submit" style="font-size:0.72rem; padding:2px 8px; border-radius:4px;
+                  border:1px solid #ef4444; color:#ef4444; background:#fff; cursor:pointer;">
+                  Eliminar
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <details style="background:#f9f9f9; border-radius:8px; padding:12px;">
+        <summary style="cursor:pointer; font-size:0.82rem; font-weight:600; color:#0047ab;">
+          + Nueva etiqueta
+        </summary>
+        <form method="post" action="/admin/wa/etiquetas/nueva"
+              style="display:grid; gap:8px; margin-top:12px;">
+          <input name="nombre" placeholder="Nombre de la etiqueta" required
+                 style="padding:6px 10px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          <div style="display:grid; grid-template-columns:1fr 80px; gap:8px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label style="font-size:0.78rem; color:#666;">Color:</label>
+              <input type="color" name="color" value="#3b82f6"
+                     style="width:40px; height:28px; border:1px solid #ddd; border-radius:4px; cursor:pointer;">
+            </div>
+            <input type="number" name="orden" placeholder="Orden" value="0"
+                   style="padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:0.82rem;">
+          </div>
+          <button type="submit" style="padding:7px; background:#0047ab; color:#fff;
+                  border:none; border-radius:6px; font-size:0.82rem; cursor:pointer;">
+            Agregar etiqueta
+          </button>
+        </form>
+      </details>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

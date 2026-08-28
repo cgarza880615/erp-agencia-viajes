@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Buscar — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">🔍 Búsqueda Global</h1>
+</div>
+
+<!-- Buscador -->
+<form method="get" action="/buscar" style="margin-bottom:24px;">
+  <div style="display:flex; gap:10px; max-width:600px;">
+    <input class="field-input" type="search" name="q" value="{{ q }}"
+           placeholder="Nombre, teléfono, email, destino, # itinerario..."
+           autofocus style="flex:1; font-size:1rem; padding:10px 14px;">
+    <button type="submit" class="btn btn-primary" style="padding:10px 20px;">Buscar</button>
+  </div>
+</form>
+
+{% if q and q | length >= 2 %}
+
+  {% set total = clientes | length + reservas | length + cotizaciones | length %}
+  {% if total == 0 %}
+  <div class="card">
+    <div style="padding:40px; text-align:center; color:var(--text2);">
+      Sin resultados para "<strong>{{ q }}</strong>".
+    </div>
+  </div>
+  {% else %}
+
+  <p style="font-size:0.85rem; color:var(--text2); margin-bottom:20px;">
+    {{ total }} resultado(s) para "<strong>{{ q }}</strong>"
+  </p>
+
+  <!-- Clientes -->
+  {% if clientes %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">👥 Clientes ({{ clientes | length }})</div>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Nombre</th><th>Teléfono</th><th>Email</th><th>Viajes</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in clientes %}
+        <tr>
+          <td style="font-size:0.8rem; color:var(--text2); font-family:monospace;">{{ c.id_cliente }}</td>
+          <td><strong>{{ c.nombre }}</strong></td>
+          <td style="font-size:0.85rem;">{{ c.telefono or '—' }}</td>
+          <td style="font-size:0.82rem; color:var(--text2);">{{ c.email or '—' }}</td>
+          <td><span class="badge badge-blue" style="font-size:0.7rem;">{{ c.n_viajes }}</span></td>
+          <td><a href="/clientes/{{ c.id_cliente }}" class="btn btn-outline" style="font-size:0.78rem; padding:3px 10px;">Ver →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Itinerarios -->
+  {% if reservas %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">✈️ Itinerarios ({{ reservas | length }})</div>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Cliente</th><th>Destino</th><th>Salida</th><th>Estado</th><th>Venta</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for r in reservas %}
+        <tr>
+          <td style="font-family:monospace; font-size:0.82rem; color:var(--text2);">#{{ r.id_reserva }}</td>
+          <td><strong>{{ r.nombre_cliente }}</strong></td>
+          <td>{{ r.destino }}</td>
+          <td style="font-size:0.82rem; white-space:nowrap;">{{ r.fecha_salida or '—' }}</td>
+          <td>
+            {% if r.estado == 'ACTIVO' %}<span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>
+            {% elif r.estado == 'CANCELADO' %}<span class="badge badge-red" style="font-size:0.65rem;">CANCELADO</span>
+            {% elif r.estado == 'TERMINADO' %}<span class="badge badge-blue" style="font-size:0.65rem;">TERMINADO</span>
+            {% else %}<span class="badge" style="font-size:0.65rem;">{{ r.estado }}</span>{% endif %}
+          </td>
+          <td class="money" style="font-size:0.85rem;">${{ '{:,.0f}'.format(r.venta_total) }} {{ r.moneda }}</td>
+          <td><a href="/bitacora/{{ r.id_reserva }}" class="btn btn-outline" style="font-size:0.78rem; padding:3px 10px;">Ver →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <!-- Cotizaciones -->
+  {% if cotizaciones %}
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">💰 Cotizaciones ({{ cotizaciones | length }})</div>
+    <table>
+      <thead>
+        <tr><th>Folio</th><th>Cliente</th><th>Destino</th><th>Salida</th><th>Estado</th><th>Total</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for c in cotizaciones %}
+        <tr>
+          <td style="font-family:monospace; font-size:0.78rem; color:var(--text2);">
+            COT-{{ c.fecha_cotizacion[:4] }}-{{ '%04d' % c.id_cotizacion }}
+          </td>
+          <td><strong>{{ c.cliente }}</strong></td>
+          <td>{{ c.destino }}</td>
+          <td style="font-size:0.82rem; white-space:nowrap;">{{ c.fecha_salida or '—' }}</td>
+          <td>
+            {% if c.estado == 'PENDIENTE' %}<span class="badge badge-yellow" style="font-size:0.65rem;">PENDIENTE</span>
+            {% elif c.estado == 'ENVIADA' %}<span class="badge" style="font-size:0.65rem; background:#e0f2fe; color:#0369a1;">ENVIADA</span>
+            {% elif c.estado == 'ACEPTADA' %}<span class="badge badge-green" style="font-size:0.65rem;">ACEPTADA</span>
+            {% elif c.estado == 'RECHAZADA' %}<span class="badge badge-red" style="font-size:0.65rem;">RECHAZADA</span>
+            {% else %}<span class="badge" style="font-size:0.65rem; background:#f1f5f9; color:#94a3b8;">{{ c.estado }}</span>{% endif %}
+          </td>
+          <td class="money" style="font-size:0.85rem;">${{ '{:,.0f}'.format(c.venta_total) }} {{ c.moneda }}</td>
+          <td><a href="/cotizaciones/{{ c.id_cotizacion }}" class="btn btn-outline" style="font-size:0.78rem; padding:3px 10px;">Ver →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% endif %}
+
+{% elif q %}
+<div class="alerta-inline alerta-warning">Escribe al menos 2 caracteres para buscar.</div>
+{% else %}
+<div style="text-align:center; padding:40px; color:var(--text2); font-size:0.9rem;">
+  Busca por nombre de cliente, teléfono, email, destino o número de itinerario.
+</div>
+{% endif %}
+
+{% endblock %}

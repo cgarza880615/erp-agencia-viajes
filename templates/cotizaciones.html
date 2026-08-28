@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Cotizaciones — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">💰 Cotizaciones</h1>
+  <a href="/cotizaciones/nueva" class="btn btn-primary">+ Nueva Cotización</a>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+    <input class="field-input" type="search" placeholder="Buscar por cliente o destino..."
+           style="flex:1; min-width:200px; max-width:340px;"
+           id="inp-q" value="{{ q }}">
+    <select class="field-select" style="width:160px;" id="sel-estado">
+      <option value="">Todos los estados</option>
+      {% for est in ['PENDIENTE','ENVIADA','ACEPTADA','RECHAZADA','EXPIRADA'] %}
+      <option value="{{ est }}" {% if filtro_estado == est %}selected{% endif %}>{{ est }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</div>
+
+<!-- Tabla -->
+{% set q_lower = q | lower %}
+{% set rows = [] %}
+{% for c in cotizaciones %}
+  {% if (not q or q_lower in c.cliente|lower or q_lower in c.destino|lower)
+     and (not filtro_estado or filtro_estado == c.estado) %}
+    {% set _ = rows.append(c) %}
+  {% endif %}
+{% endfor %}
+
+{% if rows %}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>Folio</th>
+        <th>Cliente</th>
+        <th>Destino</th>
+        <th>Salida</th>
+        <th>Total</th>
+        <th>Estado</th>
+        <th>Vigencia</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="tbody-cots">
+      {% for c in rows %}
+      <tr>
+        <td style="font-family:monospace; font-size:0.8rem; color:var(--text2);">
+          COT-{{ c.fecha_cotizacion[:4] }}-{{ '%04d' % c.id_cotizacion }}
+        </td>
+        <td><strong>{{ c.cliente }}</strong></td>
+        <td>{{ c.destino }}</td>
+        <td style="white-space:nowrap; font-size:0.875rem;">{{ c.fecha_salida }}</td>
+        <td class="money">${{ '{:,.0f}'.format(c.venta_total) }} {{ c.moneda }}</td>
+        <td>
+          {% if c.estado == 'PENDIENTE' %}
+            <span class="badge badge-yellow">PENDIENTE</span>
+          {% elif c.estado == 'ENVIADA' %}
+            <span class="badge" style="background:#e0f2fe; color:#0369a1;">ENVIADA</span>
+          {% elif c.estado == 'ACEPTADA' %}
+            <span class="badge badge-green">ACEPTADA</span>
+          {% elif c.estado == 'RECHAZADA' %}
+            <span class="badge badge-red">RECHAZADA</span>
+          {% elif c.estado == 'EXPIRADA' %}
+            <span class="badge" style="background:#f1f5f9; color:#94a3b8;">EXPIRADA</span>
+          {% endif %}
+          {% if c.convertida_a_reserva %}
+            <a href="/bitacora/{{ c.convertida_a_reserva }}" style="font-size:0.72rem; color:var(--primary); margin-left:4px;">→ Itin #{{ c.convertida_a_reserva }}</a>
+          {% endif %}
+        </td>
+        <td style="font-size:0.8rem; color:{% if c.fecha_vencimiento < today %}var(--danger){% else %}var(--text2){% endif %};">
+          {{ c.fecha_vencimiento }}
+        </td>
+        <td>
+          <a href="/cotizaciones/{{ c.id_cotizacion }}" class="btn btn-outline"
+             style="font-size:0.78rem; padding:4px 10px;">Ver →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div style="padding:40px; text-align:center; color:var(--text2);">
+    {% if q or filtro_estado %}Sin resultados para los filtros aplicados.
+    {% else %}No hay cotizaciones registradas. <a href="/cotizaciones/nueva" class="btn btn-primary" style="margin-left:12px;">+ Nueva</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<script>
+(function() {
+  const inp   = document.getElementById('inp-q');
+  const sel   = document.getElementById('sel-estado');
+  const tbody = document.getElementById('tbody-cots');
+  if (!tbody) return;
+  const rows  = Array.from(tbody.querySelectorAll('tr'));
+  function filtrar() {
+    const q = inp.value.toLowerCase();
+    const e = sel.value.toUpperCase();
+    rows.forEach(tr => {
+      const txt   = tr.textContent.toLowerCase();
+      const badge = tr.querySelector('.badge')?.textContent.trim().toUpperCase() || '';
+      const matchQ = !q || txt.includes(q);
+      const matchE = !e || badge.startsWith(e);
+      tr.style.display = (matchQ && matchE) ? '' : 'none';
+    });
+  }
+  inp.addEventListener('input', filtrar);
+  sel.addEventListener('change', filtrar);
+})();
+</script>
+
+{% endblock %}

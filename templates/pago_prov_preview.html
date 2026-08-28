@@ -1,0 +1,30 @@
+<div id="pago-prov-preview">
+{% if aviso == 'doble' %}
+<div style="background:rgba(231,76,60,0.1);border-left:5px solid #e74c3c;border-radius:8px;padding:12px 16px;margin:8px 0 0;font-size:0.82rem;">
+  <b style="color:#c0392b;">🚨 POSIBLE PAGO DOBLE — {{ categoria }}</b><br>
+  Ya existe un egreso por esta categoría de <b>${{ '{:,.2f}'.format(total_ya) }}</b>.<br>
+  Costo registrado en el itinerario: <b>${{ '{:,.2f}'.format(costo_reg) }}</b> — El monto ya está cubierto.<br>
+  <span style="color:#c0392b;font-weight:600;">Revisa antes de continuar.</span>
+</div>
+{% elif aviso == 'mayor' %}
+<div style="background:rgba(230,126,34,0.12);border-left:5px solid #e67e22;border-radius:8px;padding:12px 16px;margin:8px 0 0;font-size:0.82rem;">
+  <b style="color:#d35400;">⚠️ ESTE PAGO SUPERA EL COSTO REGISTRADO — {{ categoria }}</b><br>
+  Costo registrado: <b>${{ '{:,.2f}'.format(costo_reg) }}</b> · Ya pagado: <b>${{ '{:,.2f}'.format(total_ya) }}</b> · Este pago: <b>${{ '{:,.2f}'.format(monto) }}</b><br>
+  Total tras este pago: <b>${{ '{:,.2f}'.format(total_tras) }}</b> (${{ '{:,.2f}'.format(total_tras - costo_reg) }} de más).<br>
+  <span style="color:#d35400;">Si el costo real del proveedor cambió, marca "Pago final" abajo para actualizarlo automáticamente, o corrígelo primero en el itinerario.</span>
+</div>
+{% elif aviso == 'menor' %}
+<div style="background:rgba(52,152,219,0.10);border-left:5px solid #3498db;border-radius:8px;padding:12px 16px;margin:8px 0 0;font-size:0.82rem;">
+  <b style="color:#2874a6;">ℹ️ ESTE PAGO ES MENOR AL COSTO REGISTRADO — {{ categoria }}</b><br>
+  Costo registrado: <b>${{ '{:,.2f}'.format(costo_reg) }}</b> · Ya pagado: <b>${{ '{:,.2f}'.format(total_ya) }}</b> · Este pago: <b>${{ '{:,.2f}'.format(monto) }}</b><br>
+  Total tras este pago: <b>${{ '{:,.2f}'.format(total_tras) }}</b> (${{ '{:,.2f}'.format(costo_reg - total_tras) }} de menos).<br>
+  <span style="color:#2874a6;">Si el costo real del proveedor cambió, marca "Pago final" abajo para actualizarlo automáticamente, o corrígelo primero en el itinerario. Si es un pago parcial, déjalo en blanco — es normal seguir abonando después.</span>
+</div>
+{% endif %}
+{% if col_costo and costo_reg > 0 and monto and monto > 0 %}
+<label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:0.82rem; cursor:pointer;">
+  <input type="checkbox" name="pago_final" value="1">
+  ☑️ Este es el pago final de {{ categoria }} — ajustar el costo del proveedor a ${{ '{:,.2f}'.format(total_tras) }}
+</label>
+{% endif %}
+</div>

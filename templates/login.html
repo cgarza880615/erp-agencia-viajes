@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ERP Agencia de Viajes — Iniciar Sesión</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <style>
+    body {
+      background: linear-gradient(160deg, #001f6b 0%, #0047ab 50%, #0077cc 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .login-header .logo-icon {
+      width: 148px;
+      height: 148px;
+      background: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+      padding: 14px;
+      box-sizing: border-box;
+    }
+    .login-header .logo-icon img {
+      width: 112px;
+      height: auto;
+    }
+    .login-header h1 {
+      color: white;
+      font-size: 1.7rem;
+      font-weight: 700;
+      margin: 0 0 4px;
+      letter-spacing: 0.3px;
+    }
+    .login-header p {
+      color: rgba(255,255,255,0.70);
+      font-size: 0.8rem;
+      letter-spacing: 0.7px;
+      text-transform: uppercase;
+      margin: 0;
+    }
+
+    .login-box {
+      background: white;
+      border-radius: 16px;
+      padding: 36px 40px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.30);
+    }
+    .login-box h3 {
+      text-align: center;
+      color: #0047ab;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0 0 24px;
+    }
+
+    .form-group { margin-bottom: 16px; }
+    .form-group label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #718096;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 10px 14px;
+      background: #f8f9fa;
+      border: 1.5px solid #e2e8f0;
+      border-radius: 8px;
+      color: #1a202c;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-sizing: border-box;
+    }
+    .form-group input:focus {
+      border-color: #0066cc;
+      box-shadow: 0 0 0 3px rgba(0,102,204,0.12);
+    }
+    .form-group input::placeholder { color: #a0aec0; }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #0066cc, #0047ab);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.15s, transform 0.1s;
+      letter-spacing: 0.3px;
+    }
+    .btn-login:hover { opacity: 0.92; transform: translateY(-1px); }
+    .btn-login:active { transform: translateY(0); }
+
+    .alert-error {
+      background: rgba(229,62,62,0.08);
+      border: 1px solid #e53e3e;
+      color: #e53e3e;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.875rem;
+      margin-bottom: 18px;
+    }
+
+    .login-footer {
+      color: rgba(255,255,255,0.35);
+      font-size: 0.72rem;
+      margin-top: 24px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-header">
+    <div class="logo-icon">
+      <img src="/static/img/logo.png" alt="Tu Agencia de Viajes">
+    </div>
+    <h1>Tu Agencia de Viajes</h1>
+    <p>Sistema ERP — Torre de Control</p>
+  </div>
+
+  <div class="login-box">
+    <h3>🔐 Acceso al Sistema</h3>
+
+    {% if error %}
+    <div class="alert-error">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <div class="form-group">
+        <label for="usuario">Usuario</label>
+        <input
+          type="text"
+          id="usuario"
+          name="usuario"
+          placeholder="Tu usuario"
+          autocomplete="username"
+          autofocus
+          required
+        >
+      </div>
+      <div class="form-group">
+        <label for="password">Contraseña</label>
+        <input
+          type="password"
+          id="password"
+          name="password"
+          placeholder="Tu contraseña"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+      <button type="submit" class="btn-login">Iniciar Sesión →</button>
+    </form>
+    <p style="text-align:center;margin-top:14px;font-size:13px;">
+      <a href="https://clasica.tuagencia.com" style="color:#0077cc;text-decoration:none;">¿Prefieres la versión clásica? →</a>
+    </p>
+  </div>
+
+  <p class="login-footer">© 2026 Tu Agencia de Viajes · Acceso restringido</p>
+
+</body>
+</html>

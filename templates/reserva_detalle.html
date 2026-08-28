@@ -1,0 +1,717 @@
+{% extends "base.html" %}
+{% block title %}Reserva #{{ reserva.id_reserva }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<!-- ── Header ── -->
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="/bitacora" class="btn btn-outline" style="font-size:0.8rem;">← Itinerarios</a>
+  <div style="flex:1;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h1 class="page-title" style="margin:0;">✈️ Reserva #{{ reserva.id_reserva }}</h1>
+      {% if reserva.estado == 'ACTIVO' %}
+        <span class="badge badge-green" style="font-size:0.8rem;">ACTIVO</span>
+      {% elif reserva.estado == 'TERMINADO' %}
+        <span class="badge badge-blue" style="font-size:0.8rem;">TERMINADO</span>
+      {% elif reserva.estado == 'CANCELADO' %}
+        <span class="badge badge-red" style="font-size:0.8rem;">CANCELADO</span>
+      {% endif %}
+      {% if es_de_grupo %}
+        <a href="/grupos/{{ reserva.id_grupo }}" class="badge badge-blue" style="font-size:0.8rem; text-decoration:none;">🧳 {{ nombre_grupo_reserva }}</a>
+      {% endif %}
+    </div>
+    <p style="color:var(--text2); font-size:0.875rem; margin-top:4px;">
+      {{ reserva.nombre_cliente }} &nbsp;·&nbsp; {{ reserva.destino }}
+    </p>
+  </div>
+  <a href="/bitacora/{{ reserva.id_reserva }}/editar" class="btn btn-outline">✏️ Editar</a>
+</div>
+
+{% if es_de_grupo %}
+<div class="card" style="margin-bottom:16px; border-left:4px solid var(--info);">
+  <div class="card-body" style="font-size:0.85rem;">
+    🧳 Pertenece al grupo <strong>{{ nombre_grupo_reserva }}</strong>
+    {% if reserva.cupos_bloqueados_grupo %}
+    — este itinerario representa <strong>{{ reserva.num_pax }} de {{ reserva.cupos_bloqueados_grupo }} pax</strong>
+    ({{ (100 * reserva.num_pax / reserva.cupos_bloqueados_grupo) | round(1) }}%)
+    {% endif %}
+    <br><span style="opacity:0.8;">💡 El estado de pago a proveedor de este itinerario se controla a nivel de grupo — <a href="/grupos/{{ reserva.id_grupo }}">ver detalle del grupo</a>.</span>
+    <button type="button" class="btn btn-outline" style="font-size:0.78rem; margin-top:8px;"
+            hx-post="/bitacora/{{ reserva.id_reserva }}/aplicar-prorrateo" hx-target="body" hx-swap="none"
+            hx-on::after-request="location.reload()">
+      🔄 Aplicar prorrateo del grupo al costo de este itinerario
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Avisos inline de la reserva ── -->
+{% if reserva.estado == 'ACTIVO' %}
+  {% if reserva.fecha_limite_proveedor and reserva.fecha_limite_proveedor not in ('', 'None') %}
+    {% set dp = ((reserva.fecha_limite_proveedor | string)[:10]) %}
+    {% if dp < today %}
+      <div class="alerta-inline alerta-critica">
+        🚨 <strong>LÍMITE DE PAGO A PROVEEDOR VENCIDO</strong> — venció el {{ dp }}. Verifica si el pago fue realizado.
+      </div>
+    {% elif dp <= (today_7d | default(today)) %}
+      <div class="alerta-inline alerta-error">
+        🚨 <strong>PAGO A PROVEEDOR INMINENTE</strong> — el límite vence el {{ dp }}. ¡Actuar de inmediato!
+      </div>
+    {% elif dp <= (today_15d | default(today)) %}
+      <div class="alerta-inline alerta-warning">
+        💸 <strong>Pago a proveedor próximo</strong> — el límite vence el {{ dp }}.
+      </div>
+    {% endif %}
+  {% endif %}
+  {% if saldo.saldo_pendiente > 0.01 and reserva.fecha_regreso and reserva.fecha_regreso < today %}
+    <div class="alerta-inline alerta-warning">
+      ⚠️ <strong>DEUDA POST-VIAJE</strong> — el cliente ya regresó de {{ reserva.destino }} con
+      <strong>{{ saldo.saldo_pendiente | moneda(reserva.moneda) }}</strong> pendiente de cobro.
+    </div>
+  {% endif %}
+{% endif %}
+
+<!-- ── Semáforo + Checklist ── -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;" class="semaforo-checklist-grid">
+
+  <!-- Semáforo de proveedores -->
+  <div class="card" style="margin-bottom:0;">
+    <div class="card-header">💸 Semáforo de Proveedores</div>
+    <div class="card-body" style="padding:14px 20px;">
+      {% if es_de_grupo %}
+      <p style="color:var(--text2); font-size:0.82rem; margin:0;">💸 Controlado a nivel de grupo — ver <a href="/grupos/{{ reserva.id_grupo }}">🧳 {{ nombre_grupo_reserva }}</a>.</p>
+      {% endif %}
+      <div id="semaforo-items" style="display:flex; flex-wrap:wrap; gap:10px;">
+        {% for item in semaforo %}
+        {% if item.estado != 'na' %}
+        <div style="display:flex; align-items:center; gap:7px; padding:7px 12px;
+                    border-radius:20px; font-size:0.82rem; font-weight:600;
+                    background:{% if item.estado == 'ok' %}rgba(39,174,96,0.1){% else %}rgba(229,62,62,0.1){% endif %};
+                    border:1px solid {% if item.estado == 'ok' %}rgba(39,174,96,0.3){% else %}rgba(229,62,62,0.3){% endif %};">
+          <span style="font-size:0.85rem;">
+            {% if item.estado == 'ok' %}🟢{% else %}🔴{% endif %}
+          </span>
+          <span style="color:{% if item.estado == 'ok' %}#166534{% else %}#991b1b{% endif %};">
+            {{ item.label }}
+          </span>
+          <span style="font-size:0.72rem; opacity:0.7; font-weight:400;">
+            ${{ '{:,.0f}'.format(item.pagado) }} / ${{ '{:,.0f}'.format(item.costo) }}
+          </span>
+        </div>
+        {% else %}
+        <div style="display:flex; align-items:center; gap:7px; padding:7px 12px;
+                    border-radius:20px; font-size:0.82rem;
+                    background:rgba(148,163,184,0.08); border:1px solid rgba(148,163,184,0.2);">
+          <span>⚪</span>
+          <span style="color:var(--text2);">{{ item.label }}</span>
+          <span style="font-size:0.72rem; color:var(--text2);">N/A</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Check-list operativo -->
+  {% with id_reserva=reserva.id_reserva %}
+  {% include "checklist_section.html" %}
+  {% endwith %}
+
+</div>
+
+<!-- ── Grid superior ── -->
+<div class="detalle-grid">
+
+  <!-- Datos del viaje -->
+  <div class="card">
+    <div class="card-header">🗺️ Datos del viaje</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        <dt>Destino</dt>       <dd>{{ reserva.destino }}</dd>
+        <dt>Origen</dt>        <dd>{{ reserva.origen or 'Monterrey' }}</dd>
+        <dt>Salida</dt>        <dd>{{ reserva.fecha_salida }}</dd>
+        <dt>Regreso</dt>       <dd>{{ reserva.fecha_regreso }}</dd>
+        <dt>Lím. liquidación</dt><dd>{{ reserva.fecha_limite_liquidacion or '—' }}</dd>
+        {% if reserva.nombre_hotel %}
+        <dt>Hotel</dt>         <dd>{{ reserva.nombre_hotel }}</dd>
+        {% endif %}
+        {% if reserva.aerolinea %}
+        <dt>Aerolínea</dt>     <dd>{{ reserva.aerolinea }}</dd>
+        {% endif %}
+        {% if reserva.mayorista %}
+        <dt>Mayorista</dt>     <dd>{{ reserva.mayorista }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <!-- Datos del cliente -->
+  <div class="card">
+    <div class="card-header">👤 Cliente</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        <dt>Nombre</dt>
+        <dd><strong><a href="/clientes/{{ reserva.id_cliente }}" style="color:var(--primary);">{{ reserva.nombre_cliente }}</a></strong></dd>
+        <dt>Teléfono</dt>      <dd>{{ reserva.codigo_pais or '+52' }} {{ reserva.telefono or '—' }}</dd>
+        <dt>Email</dt>         <dd>{{ reserva.email or '—' }}</dd>
+        <dt>Fecha nacimiento</dt><dd>{{ reserva.nacimiento_cliente or '—' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- Resumen financiero -->
+  <div class="card">
+    <div class="card-header">💰 Resumen financiero</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        <dt>Venta total</dt>
+        <dd class="money"><strong>{{ reserva.venta_total | moneda(reserva.moneda) }}</strong></dd>
+        <dt>Cobrado</dt>
+        <dd class="money money-positive">{{ saldo.cobrado_activos | moneda(reserva.moneda) }}</dd>
+        <dt>Saldo pendiente</dt>
+        <dd class="money {% if saldo.saldo_pendiente > 0 %}money-negative{% else %}money-positive{% endif %}">
+          <strong>{{ saldo.saldo_pendiente | moneda(reserva.moneda) }}</strong>
+        </dd>
+        <dt>Costo total</dt>
+        <dd class="money">{{ reserva.costo_total | moneda(reserva.moneda) }}</dd>
+        <dt>Utilidad proyectada</dt>
+        <dd class="money money-positive">{{ reserva.utilidad_proyectada | moneda(reserva.moneda) }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- Control de caja: cobrado vs. entregado a proveedores -->
+  {% set ret = control_caja.retenido %}
+  {% if ret < -0.01 %}
+    {% set ret_bg, ret_bd, ret_ic, ret_lbl = 'rgba(231,76,60,0.12)', '#e74c3c', '⚠️', 'ADELANTADO A PROVEEDOR' %}
+  {% elif ret > 0.01 %}
+    {% set ret_bg, ret_bd, ret_ic, ret_lbl = 'rgba(243,156,18,0.12)', '#f39c12', '💼', 'RETENIDO SIN APLICAR' %}
+  {% else %}
+    {% set ret_bg, ret_bd, ret_ic, ret_lbl = 'rgba(46,204,113,0.12)', '#2ecc71', '✅', 'TODO APLICADO' %}
+  {% endif %}
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header">🧮 Control de Caja</div>
+    <div class="card-body">
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:160px; background:rgba(52,152,219,0.10); border-left:4px solid #3498db; border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; opacity:0.75; letter-spacing:.5px;">💰 COBRADO AL CLIENTE</div>
+          <div style="font-size:19px; font-weight:700;">{{ control_caja.cobrado | moneda(reserva.moneda) }}</div>
+        </div>
+        <div style="flex:1; min-width:160px; background:rgba(46,204,113,0.10); border-left:4px solid #2ecc71; border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; opacity:0.75; letter-spacing:.5px;">🏢 PAGADO A PROVEEDORES</div>
+          <div style="font-size:19px; font-weight:700;">{{ control_caja.pagado_proveedores | moneda(reserva.moneda) }}</div>
+        </div>
+        <div style="flex:1; min-width:160px; background:{{ ret_bg }}; border-left:4px solid {{ ret_bd }}; border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; opacity:0.75; letter-spacing:.5px;">{{ ret_ic }} {{ ret_lbl }}</div>
+          <div style="font-size:19px; font-weight:700;">{{ ret | moneda(reserva.moneda) }}</div>
+        </div>
+        <div style="flex:1; min-width:160px; background:rgba(155,89,182,0.10); border-left:4px solid #9b59b6; border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; opacity:0.75; letter-spacing:.5px;">🧾 DEUDA A PROVEEDORES</div>
+          <div style="font-size:19px; font-weight:700;">{{ control_caja.deuda_proveedores | moneda(reserva.moneda) }}</div>
+        </div>
+        <div style="flex:1; min-width:160px; background:rgba(46,204,113,0.10); border-left:4px solid #27ae60; border-radius:6px; padding:10px 14px;">
+          <div style="font-size:11px; opacity:0.75; letter-spacing:.5px;">🟢 UTILIDAD</div>
+          <div style="font-size:19px; font-weight:700;">{{ control_caja.utilidad | moneda(reserva.moneda) }}</div>
+        </div>
+      </div>
+      <p style="font-size:0.75rem; color:var(--text2); margin:10px 0 0;">
+        💼 Retenido sin aplicar = de lo cobrado, lo que sigue haciendo falta para cubrir la deuda a proveedores.
+        ⚠️ Adelantado a proveedor = se le pagó a un proveedor más de lo que el cliente ha cubierto hasta ahora — revisar.
+        🧾 Deuda a proveedores = lo que falta por pagar en total.
+        🟢 Utilidad = lo que queda de lo cobrado una vez cubierta toda la deuda a proveedores — esto ya es ganancia, no dinero pendiente.
+      </p>
+    </div>
+  </div>
+
+  <!-- Desglose Cobro / Costo / Utilidad por concepto -->
+  <div class="card" style="grid-column: 1 / -1;">
+    <div class="card-header">🧾 Cobro · Costo · Utilidad</div>
+    <div style="overflow-x:auto;">
+      <table style="font-size:0.82rem;">
+        <thead>
+          <tr>
+            <th>Concepto</th>
+            <th style="text-align:right;">Cobro cliente</th>
+            <th style="text-align:right;">Costo prov.</th>
+            <th style="text-align:right;">Margen</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for concepto, col_c, col_k, es_adicionales in [
+              ('✈️ Vuelos',    'cobro_vuelos',    'costo_vuelos', false),
+              ('🪙 TUA',       'cobro_tua',       'costo_tua', false),
+              ('🏨 Hotel',     'cobro_hotel',     'costo_hotel', false),
+              ('🚐 Traslados', 'cobro_traslados', 'costo_traslados', false),
+              ('🗺️ Tours',    'cobro_tours',     'costo_tours', false),
+              ('➕ Adicionales','cobro_adicionales','costo_adicionales', true),
+          ] %}
+          {% set c = reserva[col_c] | float + (extras_cobro_total if es_adicionales else 0) %}
+          {% set k = reserva[col_k] | float + (extras_costo_total if es_adicionales else 0) %}
+          {% if c > 0 or k > 0 %}
+          {% set m = c - k %}
+          <tr>
+            <td>{{ concepto }}</td>
+            <td class="money" style="text-align:right; color:var(--primary);">{{ c | moneda(reserva.moneda) }}</td>
+            <td class="money" style="text-align:right; color:var(--text2);">{{ k | moneda(reserva.moneda) }}</td>
+            <td class="money" style="text-align:right; font-weight:600;
+                color:{% if m >= 0 %}var(--primary){% else %}var(--danger){% endif %};">
+              {{ m | moneda(reserva.moneda) }}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+          {% if reserva.costo_comisiones | float > 0 %}
+          <tr>
+            <td style="color:var(--text2);">🏦 Comisiones</td>
+            <td></td>
+            <td class="money" style="text-align:right; color:var(--text2);">{{ reserva.costo_comisiones | float | moneda(reserva.moneda) }}</td>
+            <td class="money" style="text-align:right; color:var(--danger);">{{ (reserva.costo_comisiones | float * -1) | moneda(reserva.moneda) }}</td>
+          </tr>
+          {% endif %}
+        </tbody>
+        {% set _costo_total_full = reserva.costo_total | float + extras_costo_total %}
+        {% set _utilidad_full = reserva.venta_total | float - _costo_total_full %}
+        <tfoot>
+          <tr style="font-weight:700; border-top:2px solid var(--border);">
+            <td>TOTAL</td>
+            <td class="money" style="text-align:right; color:var(--primary);">{{ reserva.venta_total | moneda(reserva.moneda) }}</td>
+            <td class="money" style="text-align:right; color:var(--text2);">{{ _costo_total_full | moneda(reserva.moneda) }}</td>
+            <td class="money" style="text-align:right; font-weight:700;
+                color:{% if _utilidad_full >= 0 %}var(--primary){% else %}var(--danger){% endif %};">
+              {{ _utilidad_full | moneda(reserva.moneda) }}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Info operativa de proveedores ── -->
+{% set _tiene_vuelo = reserva.aerolinea or reserva.itinerario_vuelo_plataforma or reserva.localizador_global or reserva.hora_vuelo_ida %}
+{% set _tiene_hotel = reserva.nombre_hotel or reserva.itinerario_hotel_plataforma or reserva.mayorista %}
+{% set _tiene_traslado = reserva.proveedor_traslados or reserva.confirmacion_proveedor_traslados %}
+{% set _tiene_tours = reserva.proveedor_tours or reserva.confirmacion_proveedor_tours %}
+{% set _tiene_adi = reserva.proveedor_adicionales or reserva.confirmacion_proveedor_adicionales %}
+{% set _tiene_notas = reserva.restricciones_medicas or reserva.solicitudes_especiales or reserva.comentarios_operativos or reserva.notas_abiertas %}
+
+{% if _tiene_vuelo or _tiene_hotel or _tiene_traslado or _tiene_tours or _tiene_adi or _tiene_notas %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📋 Detalle Operativo</div>
+  <div class="card-body" style="padding:16px 20px;">
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:20px;">
+
+      {% if _tiene_vuelo %}
+      <div>
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">✈️ Vuelo</p>
+        <dl class="datos-list" style="margin:0;">
+          {% if reserva.aerolinea %}<dt>Aerolínea</dt><dd>{{ reserva.aerolinea }}</dd>{% endif %}
+          {% if reserva.itinerario_vuelo_plataforma %}<dt>Localizador</dt><dd><strong>{{ reserva.itinerario_vuelo_plataforma }}</strong></dd>{% endif %}
+          {% if reserva.localizador_global %}<dt>Loc. global</dt><dd><strong>{{ reserva.localizador_global }}</strong></dd>{% endif %}
+          {% if reserva.fecha_vuelo_ida or reserva.hora_vuelo_ida %}
+          <dt>Salida</dt>
+          <dd>{{ reserva.fecha_vuelo_ida or reserva.fecha_salida }}{% if reserva.hora_vuelo_ida %} · {{ reserva.hora_vuelo_ida }}{% endif %}</dd>
+          {% endif %}
+          {% if reserva.fecha_vuelo_vuelta or reserva.hora_vuelo_vuelta %}
+          <dt>Regreso</dt>
+          <dd>{{ reserva.fecha_vuelo_vuelta or reserva.fecha_regreso }}{% if reserva.hora_vuelo_vuelta %} · {{ reserva.hora_vuelo_vuelta }}{% endif %}</dd>
+          {% endif %}
+          {% if reserva.detalle_equipaje %}<dt>Equipaje</dt><dd>{{ reserva.detalle_equipaje }}</dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
+      {% if _tiene_hotel %}
+      <div>
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">🏨 Hotel</p>
+        <dl class="datos-list" style="margin:0;">
+          {% if reserva.mayorista %}<dt>Mayorista</dt><dd>{{ reserva.mayorista }}</dd>{% endif %}
+          {% if reserva.nombre_hotel %}<dt>Hotel</dt><dd>{{ reserva.nombre_hotel }}</dd>{% endif %}
+          {% if reserva.itinerario_hotel_plataforma %}<dt>Localizador</dt><dd><strong>{{ reserva.itinerario_hotel_plataforma }}</strong></dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
+      {% if _tiene_traslado %}
+      <div>
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">🚐 Traslados</p>
+        <dl class="datos-list" style="margin:0;">
+          {% if reserva.proveedor_traslados %}<dt>Proveedor</dt><dd>{{ reserva.proveedor_traslados }}</dd>{% endif %}
+          {% if reserva.confirmacion_proveedor_traslados %}<dt>Confirmación</dt><dd><strong>{{ reserva.confirmacion_proveedor_traslados }}</strong></dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
+      {% if _tiene_tours %}
+      <div>
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">🗺️ Tours</p>
+        <dl class="datos-list" style="margin:0;">
+          {% if reserva.proveedor_tours %}<dt>Proveedor</dt><dd>{{ reserva.proveedor_tours }}</dd>{% endif %}
+          {% if reserva.confirmacion_proveedor_tours %}<dt>Confirmación</dt><dd><strong>{{ reserva.confirmacion_proveedor_tours }}</strong></dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
+      {% if _tiene_adi %}
+      <div>
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">➕ Adicionales</p>
+        <dl class="datos-list" style="margin:0;">
+          {% if reserva.proveedor_adicionales %}<dt>Proveedor</dt><dd>{{ reserva.proveedor_adicionales }}</dd>{% endif %}
+          {% if reserva.confirmacion_proveedor_adicionales %}<dt>Confirmación</dt><dd><strong>{{ reserva.confirmacion_proveedor_adicionales }}</strong></dd>{% endif %}
+        </dl>
+      </div>
+      {% endif %}
+
+      {% if _tiene_notas %}
+      <div style="grid-column:1 / -1;">
+        <p style="font-size:0.72rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); margin:0 0 8px;">📝 Notas operativas</p>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px;">
+          {% if reserva.restricciones_medicas %}
+          <div style="background:rgba(229,62,62,0.05); border-left:3px solid #e53e3e; border-radius:6px; padding:8px 12px; font-size:0.85rem;">
+            <strong style="font-size:0.72rem; color:#e53e3e; display:block; margin-bottom:4px;">🏥 RESTRICCIONES MÉDICAS</strong>
+            {{ reserva.restricciones_medicas }}
+          </div>
+          {% endif %}
+          {% if reserva.solicitudes_especiales %}
+          <div style="background:rgba(0,71,171,0.05); border-left:3px solid var(--primary); border-radius:6px; padding:8px 12px; font-size:0.85rem;">
+            <strong style="font-size:0.72rem; color:var(--primary); display:block; margin-bottom:4px;">⭐ SOLICITUDES ESPECIALES</strong>
+            {{ reserva.solicitudes_especiales }}
+          </div>
+          {% endif %}
+          {% if reserva.comentarios_operativos %}
+          <div style="background:rgba(217,119,6,0.05); border-left:3px solid #d97706; border-radius:6px; padding:8px 12px; font-size:0.85rem;">
+            <strong style="font-size:0.72rem; color:#d97706; display:block; margin-bottom:4px;">🔧 COMENTARIOS OPERATIVOS</strong>
+            {{ reserva.comentarios_operativos }}
+          </div>
+          {% endif %}
+          {% if reserva.notas_abiertas %}
+          <div style="background:rgba(128,128,128,0.05); border-left:3px solid #aaa; border-radius:6px; padding:8px 12px; font-size:0.85rem;">
+            <strong style="font-size:0.72rem; color:var(--text2); display:block; margin-bottom:4px;">📌 NOTAS ABIERTAS</strong>
+            {{ reserva.notas_abiertas }}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Habitaciones ── -->
+{% if habitaciones %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🛏️ Habitaciones</div>
+  <div class="card-body" style="padding:16px 20px;">
+    {% for h in habitaciones %}
+    <div style="margin-bottom:{{ '10px' if not loop.last else '0' }};">
+      <strong>Habitación {{ loop.index }}: {{ h.tipo_habitacion }}</strong>
+      <span style="color:var(--text2); font-size:0.85rem;"> — {{ h.num_personas }} personas · Check-in {{ h.hora_checkin or '15:00' }}</span>
+      {% if h.descripcion %}<div style="font-size:0.85rem; color:var(--text2);">{{ h.descripcion }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Pasajeros (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva %}
+  {% include "pasajeros_section.html" %}
+{% endwith %}
+
+<!-- ── Plan de pagos (HTMX) ── -->
+{% include "plan_pagos_section.html" %}
+
+<!-- ── Cobros registrados (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva, moneda=reserva.moneda, cobros=ingresos %}
+  {% include "cobros_section.html" %}
+{% endwith %}
+
+<!-- ── Pagos a Proveedores (HTMX) ── -->
+{% with %}
+  {% set _pctx = pagos_prov %}
+  <div id="seccion-pagos-proveedor">
+  <div class="card" style="margin-bottom:16px;">
+    <div class="card-header">💸 Pagos a Proveedores</div>
+    <div class="card-body" style="padding-bottom:0;">
+
+      <!-- Estado por concepto -->
+      {% if _pctx.semaforo_prov %}
+      <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+        {% for item in _pctx.semaforo_prov %}
+        {% if item.estado == 'ok' %}
+        <span style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+                     border-radius:20px; font-size:0.78rem; font-weight:600;
+                     background:rgba(39,174,96,0.12); border:1px solid rgba(39,174,96,0.3); color:#166534;">
+          🟢 {{ item.label }}
+          <span style="font-weight:400; opacity:0.75;">${{ '{:,.0f}'.format(item.pagado) }}</span>
+        </span>
+        {% elif item.estado == 'pendiente' %}
+        <span style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px;
+                     border-radius:20px; font-size:0.78rem; font-weight:600;
+                     background:rgba(229,62,62,0.08); border:1px solid rgba(229,62,62,0.3); color:#991b1b;">
+          🔴 {{ item.label }}
+          <span style="font-weight:400; opacity:0.75;">${{ '{:,.0f}'.format(item.pagado) }} / ${{ '{:,.0f}'.format(item.costo) }}</span>
+        </span>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if _pctx.pagos_prov_lista %}
+      <table style="width:100%; margin-bottom:16px;">
+        <thead><tr>
+          <th>Fecha</th><th>Concepto</th>
+          <th style="text-align:right;">Monto</th>
+          <th>Método</th><th>Estado</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for p in _pctx.pagos_prov_lista %}
+        <tr {% if p.estado == 'CANCELADO' %}style="opacity:0.4;"{% endif %}>
+          <td style="font-size:0.82rem;color:var(--text2);white-space:nowrap;">{{ p.fecha_pago }}</td>
+          <td style="font-size:0.875rem;">{{ p.categoria }}</td>
+          <td style="text-align:right;font-weight:600;white-space:nowrap;">
+            ${{ '{:,.2f}'.format(p.monto) }} <span style="font-size:0.72rem;color:var(--text2);">{{ reserva.moneda }}</span>
+          </td>
+          <td style="font-size:0.82rem;color:var(--text2);">{{ p.metodo_pago or '—' }}</td>
+          <td>
+            {% if p.estado == 'CANCELADO' %}<span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
+            {% else %}<span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>{% endif %}
+          </td>
+          <td>{% if p.estado == 'ACTIVO' %}
+            <form hx-post="/bitacora/{{ reserva.id_reserva }}/pagos-proveedor/{{ p.id_movimiento }}/anular"
+                  hx-target="#seccion-pagos-proveedor" hx-swap="outerHTML"
+                  onsubmit="return confirm('¿Anular este pago?')">
+              <button type="submit" class="btn-icon-danger" title="Anular">✕</button>
+            </form>
+          {% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p style="color:var(--text2);font-size:0.875rem;margin:0 0 16px;">Sin pagos a proveedores registrados.</p>
+      {% endif %}
+      <details style="margin-bottom:16px;" {% if not _pctx.pagos_prov_lista %}open{% endif %}>
+        <summary style="cursor:pointer;font-weight:600;color:var(--primary);padding:8px 0;font-size:0.875rem;">
+          + Registrar pago a proveedor
+        </summary>
+        <form hx-post="/bitacora/{{ reserva.id_reserva }}/pagos-proveedor/registrar"
+              hx-target="#seccion-pagos-proveedor" hx-swap="outerHTML"
+              method="post" action="/bitacora/{{ reserva.id_reserva }}/pagos-proveedor/registrar"
+              style="margin-top:12px;">
+          <div class="form-grid">
+            <div class="form-field">
+              <label class="field-label">Concepto *</label>
+              <select name="categoria" class="field-select" required>
+                <option value="">Seleccionar...</option>
+                {% for val, lbl in _pctx.categorias_pago_prov %}
+                <option value="{{ val }}">{{ lbl }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="field-label">Descripción / Referencia</label>
+              <input class="field-input" type="text" name="concepto" placeholder="Localizador, folio, proveedor...">
+            </div>
+            <div class="form-field">
+              <label class="field-label">Monto *</label>
+              <input class="field-input field-money" type="number" step="0.01" min="0.01" name="monto" required placeholder="0.00">
+            </div>
+            <div class="form-field">
+              <label class="field-label">Método de pago</label>
+              <select name="metodo_pago" class="field-select">
+                {% for m in ['Transferencia','Depósito bancario','Tarjeta de Crédito/Débito','Efectivo','Cheque'] %}
+                <option value="{{ m }}">{{ m }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="field-label">Fecha del pago</label>
+              <input class="field-input" type="date" name="fecha_pago" value="{{ today }}">
+            </div>
+          </div>
+          <div style="margin-top:10px;">
+            <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💸 Registrar pago</button>
+          </div>
+        </form>
+      </details>
+    </div>
+  </div>
+  </div>
+{% endwith %}
+
+<!-- ── Suplementos / Extras (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva, moneda=reserva.moneda, extras=extras, hay_parcialidades_pendientes=hay_parcialidades_pendientes %}
+  {% include "extras_section.html" %}
+{% endwith %}
+
+<!-- ── PDFs ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📄 Documentos</div>
+  <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap;">
+    <a href="/bitacora/{{ reserva.id_reserva }}/pdf/itinerario" target="_blank"
+       class="btn btn-outline" style="font-size:0.875rem;">
+      📋 Resumen del Itinerario
+    </a>
+    <a href="/bitacora/{{ reserva.id_reserva }}/pdf/itinerario-cliente" target="_blank"
+       class="btn btn-outline" style="font-size:0.875rem;">
+      🎁 Itinerario para Cliente
+    </a>
+    <a href="/bitacora/{{ reserva.id_reserva }}/pdf/estado-cuenta" target="_blank"
+       class="btn btn-outline" style="font-size:0.875rem;">
+      💰 Estado de Cuenta PDF
+    </a>
+  </div>
+</div>
+
+<!-- ── Historial de Flujo y Anulaciones ── -->
+{% if historial_flujo %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🧾 Historial de Flujo y Anulaciones</div>
+  <div style="overflow-x:auto;">
+    <table style="font-size:0.82rem;">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Fecha</th>
+          <th>Tipo</th>
+          <th>Concepto</th>
+          <th style="text-align:right;">Monto</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in historial_flujo %}
+        <tr {% if m.estado == 'CANCELADO' %}style="opacity:0.5;"{% endif %}>
+          <td>{{ m.id_movimiento }}</td>
+          <td style="white-space:nowrap;">{{ m.fecha_pago }}</td>
+          <td>{{ m.tipo_movimiento }}</td>
+          <td>
+            {{ m.concepto }}
+            {% if m.estado == 'CANCELADO' and m.motivo_anulacion %}
+            <div style="font-size:0.72rem; color:var(--danger);">✗ {{ m.motivo_anulacion }}</div>
+            {% endif %}
+          </td>
+          <td class="money" style="text-align:right; white-space:nowrap;
+              color:{% if m.tipo_movimiento == 'INGRESO' %}var(--primary){% else %}var(--danger){% endif %};">
+            {{ m.monto | moneda(m.moneda) }}
+          </td>
+          <td>
+            {% if m.estado == 'CANCELADO' %}
+              <span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
+            {% else %}
+              <span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Bitácora de cambios (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva %}
+{% include "bitacora_section.html" %}
+{% endwith %}
+
+<!-- ── Gestión de estado ── (solo ACTIVO) -->
+{% if reserva.estado == 'ACTIVO' %}
+<div class="card" style="margin-bottom:16px; border-color:var(--danger);">
+  <div class="card-header" style="color:var(--danger);">🚨 Gestión de Reserva</div>
+  <div class="card-body">
+
+    {% if rol == 'admin' %}
+    <!-- Incobrable -->
+    {% if saldo.saldo_pendiente > 1.0 %}
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--warning); font-size:0.875rem; padding:4px 0;">
+        ⛔ Marcar como Incobrable
+      </summary>
+      <form method="post" action="/bitacora/{{ reserva.id_reserva }}/estado/incobrable"
+            style="margin-top:12px;">
+        <div class="alerta-inline alerta-warning" style="margin-bottom:12px;">
+          La deuda pendiente de <strong>{{ saldo.saldo_pendiente | moneda(reserva.moneda) }}</strong>
+          se registrará como pérdida en el libro diario. Esta acción no se puede deshacer.
+        </div>
+        <div class="form-field" style="margin-bottom:10px; max-width:500px;">
+          <label class="field-label">Motivo (obligatorio)</label>
+          <input class="field-input" type="text" name="motivo" required
+                 placeholder="Ej: Cliente no respondió tras 3 intentos de contacto">
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; margin-bottom:12px; cursor:pointer;">
+          <input type="checkbox" id="chk-incobrable-{{ reserva.id_reserva }}"
+                 onchange="document.getElementById('btn-incobrable-{{ reserva.id_reserva }}').disabled = !this.checked">
+          Confirmo marcar el Itin #{{ reserva.id_reserva }} de <strong style="margin:0 4px;">{{ reserva.nombre_cliente }}</strong> como incobrable.
+        </label>
+        <input type="hidden" name="confirmar" value="SI">
+        <button type="submit" id="btn-incobrable-{{ reserva.id_reserva }}"
+                class="btn btn-primary" style="background:var(--warning); font-size:0.875rem;" disabled>
+          ⛔ Confirmar — Marcar Incobrable
+        </button>
+      </form>
+    </details>
+    {% endif %}
+
+    <!-- Cancelar -->
+    <details>
+      <summary style="cursor:pointer; font-weight:600; color:var(--danger); font-size:0.875rem; padding:4px 0;">
+        🚨 Cancelar Reserva
+      </summary>
+      <form method="post" action="/bitacora/{{ reserva.id_reserva }}/estado/cancelar"
+            style="margin-top:12px;">
+        <div class="alerta-inline alerta-critica" style="margin-bottom:12px;">
+          Esta acción no se puede deshacer. La reserva quedará marcada como CANCELADO.
+        </div>
+        <div class="form-grid" style="margin-bottom:12px;">
+          <div class="form-field" style="grid-column:span 2;">
+            <label class="field-label">Motivo de cancelación (obligatorio)</label>
+            <input class="field-input" type="text" name="motivo" required placeholder="Ej: Cliente desistió">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Monto reembolsado al cliente</label>
+            <input class="field-input field-money" type="number" name="reembolso" min="0" step="0.01" value="0">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Pérdida financiera agencia</label>
+            <input class="field-input field-money" type="number" name="perdida" min="0" step="0.01" value="0">
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; margin-bottom:12px; cursor:pointer;">
+          <input type="checkbox" id="chk-cancelar-{{ reserva.id_reserva }}"
+                 onchange="document.getElementById('btn-cancelar-{{ reserva.id_reserva }}').disabled = !this.checked">
+          Confirmo que deseo cancelar el Itin #{{ reserva.id_reserva }} de
+          <strong style="margin:0 4px;">{{ reserva.nombre_cliente }}</strong> a <strong style="margin:0 4px;">{{ reserva.destino }}</strong>.
+        </label>
+        <input type="hidden" name="confirmar" value="SI">
+        <button type="submit" id="btn-cancelar-{{ reserva.id_reserva }}"
+                class="btn btn-primary" style="background:var(--danger); font-size:0.875rem;" disabled>
+          🚨 Confirmar Cancelación Definitiva
+        </button>
+      </form>
+    </details>
+    {% endif %}
+
+  </div>
+</div>
+{% elif reserva.estado == 'CANCELADO' %}
+<div class="alerta-inline alerta-critica" style="margin-bottom:16px;">
+  ❌ <strong>CANCELADO</strong> — {{ reserva.notas_cancelacion or '' }}
+  {% if reserva.monto_reembolsado %} · Reembolso: {{ reserva.monto_reembolsado | moneda(reserva.moneda) }}{% endif %}
+</div>
+{% elif reserva.estado == 'INCOBRABLE' %}
+<div class="alerta-inline alerta-warning" style="margin-bottom:16px;">
+  ⛔ <strong>INCOBRABLE</strong> — {{ reserva.notas_cancelacion or '' }}
+</div>
+{% endif %}
+
+<style>
+@media (max-width: 700px) {
+  .semaforo-checklist-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}

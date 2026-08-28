@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Libro Diario — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">📒 Libro Diario</h1>
+  <span style="font-size:0.8rem; color:var(--text2);">Moneda: <strong>{{ moneda_sel }}</strong></span>
+  <a href="/libro-diario/exportar?periodo={{ periodo }}&fecha_ini={{ f_ini }}&fecha_fin={{ f_fin }}&tipo={{ filtro_tipo }}&estado={{ filtro_estado }}&anio={{ anio_sel }}"
+     class="btn btn-outline" style="font-size:0.82rem;">📊 Exportar Excel</a>
+</div>
+
+<!-- ── Filtros ── -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="get" action="/libro-diario" id="form-filtros"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+
+      <!-- Período rápido -->
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Período</label>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+          {% for val, lbl in [('hoy','Hoy'),('semana','Semana'),('mes','Este mes'),('año','Año'),('todo','Todo')] %}
+          <button type="submit" name="periodo" value="{{ val }}"
+                  class="btn {% if periodo == val %}btn-primary{% else %}btn-outline{% endif %}"
+                  style="font-size:0.78rem; padding:5px 12px;"
+                  onclick="document.getElementById('inp-periodo').value='{{ val }}'">
+            {{ lbl }}
+          </button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Año (solo relevante cuando Período = Año) -->
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Año</label>
+        <select name="anio" class="field-select" style="width:100px;"
+                onchange="document.getElementById('inp-periodo').value='año'; this.form.submit();">
+          {% for a in anios_disp %}
+          <option value="{{ a }}" {% if anio_sel == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Rango personalizado -->
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Desde</label>
+        <input class="field-input" type="date" name="fecha_ini" value="{{ f_ini }}"
+               style="width:140px;" onchange="setCustomPeriodo()">
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Hasta</label>
+        <input class="field-input" type="date" name="fecha_fin" value="{{ f_fin }}"
+               style="width:140px;" onchange="setCustomPeriodo()">
+      </div>
+
+      <input type="hidden" name="periodo" id="inp-periodo" value="{{ periodo }}">
+
+      <!-- Tipo -->
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Tipo</label>
+        <select name="tipo" class="field-select" style="width:130px;">
+          <option value="" {% if not filtro_tipo %}selected{% endif %}>Todos</option>
+          <option value="INGRESO" {% if filtro_tipo == 'INGRESO' %}selected{% endif %}>Ingresos</option>
+          <option value="EGRESO"  {% if filtro_tipo == 'EGRESO'  %}selected{% endif %}>Egresos</option>
+        </select>
+      </div>
+
+      <!-- Estado -->
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Estado</label>
+        <select name="estado" class="field-select" style="width:130px;">
+          <option value="ACTIVO"    {% if filtro_estado == 'ACTIVO'    %}selected{% endif %}>Solo activos</option>
+          <option value="CANCELADO" {% if filtro_estado == 'CANCELADO' %}selected{% endif %}>Cancelados</option>
+          <option value=""          {% if filtro_estado == ''           %}selected{% endif %}>Todos</option>
+        </select>
+      </div>
+
+      <!-- Usuario operadora -->
+      {% if usuarios_disp %}
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Operadora</label>
+        <select name="usuario" class="field-select" style="width:160px;">
+          <option value="" {% if not filtro_usuario %}selected{% endif %}>— Todas —</option>
+          {% for u in usuarios_disp %}
+          <option value="{{ u }}" {% if filtro_usuario == u %}selected{% endif %}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <!-- Método de pago -->
+      {% if metodos_disp %}
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Método de Pago</label>
+        <select name="metodo" class="field-select" style="width:170px;">
+          <option value="" {% if not filtro_metodo %}selected{% endif %}>— Todos —</option>
+          {% for met in metodos_disp %}
+          <option value="{{ met }}" {% if filtro_metodo == met %}selected{% endif %}>{{ met }}</option>
+          {% endfor %}
+          <option value="__SIN__" {% if filtro_metodo == '__SIN__' %}selected{% endif %}>Sin especificar</option>
+        </select>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary" style="font-size:0.82rem; align-self:flex-end;">
+        🔍 Filtrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ── KPIs ── -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:14px; margin-bottom:20px;">
+
+  <div class="card kpi-card">
+    <div class="kpi-label">💰 Ingresos</div>
+    <div class="kpi-value money-positive">${{ '{:,.0f}'.format(total_ingresos) }}</div>
+    <div class="kpi-sub">{{ moneda_sel }}</div>
+  </div>
+
+  <div class="card kpi-card">
+    <div class="kpi-label">💸 Total egresos</div>
+    <div class="kpi-value" style="color:var(--danger);">${{ '{:,.0f}'.format(total_egresos) }}</div>
+    <div class="kpi-sub">{{ moneda_sel }}</div>
+  </div>
+
+  <div class="card kpi-card" style="border-color:{% if balance_neto >= 0 %}var(--primary){% else %}var(--danger){% endif %};">
+    <div class="kpi-label">📊 Balance neto</div>
+    <div class="kpi-value {% if balance_neto >= 0 %}money-positive{% else %}money-negative{% endif %}">
+      ${{ '{:,.0f}'.format(balance_neto) }}
+    </div>
+    <div class="kpi-sub">{{ moneda_sel }}</div>
+  </div>
+
+  <div class="card kpi-card">
+    <div class="kpi-label">🔢 Movimientos</div>
+    <div class="kpi-value" style="font-size:1.6rem;">{{ movimientos | length }}</div>
+    <div class="kpi-sub">registros</div>
+  </div>
+
+  <div class="card kpi-card" style="border-color:#f39c12;">
+    <div class="kpi-label">📌 Retenido de Clientes sin Aplicar</div>
+    <div class="kpi-value" style="color:#f39c12;">${{ '{:,.0f}'.format(retenido_sin_aplicar) }}</div>
+    <div class="kpi-sub">{{ moneda_sel }} · a hoy, no depende del período</div>
+  </div>
+
+</div>
+<p style="font-size:0.78rem; color:var(--text2); margin:-12px 0 20px;">
+  Dinero que los clientes ya pagaron en itinerarios activos pero que todavía no se le ha pagado a proveedores (hoteles, aerolíneas, etc.) — no es utilidad, es dinero comprometido pendiente de aplicar.
+</p>
+
+<!-- ── Tabla ── -->
+{% if movimientos %}
+<div class="card">
+  <div class="card-body" style="padding:0;">
+
+    <!-- Buscador inline -->
+    <div style="padding:12px 20px; border-bottom:1px solid var(--border);">
+      <input class="field-input" type="search" id="inp-buscar"
+             placeholder="Buscar por concepto, cliente, destino..."
+             style="max-width:340px; font-size:0.85rem;"
+             oninput="filtrarTabla(this.value)">
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table id="tabla-libro">
+        <thead>
+          <tr>
+            <th style="width:90px;">Fecha</th>
+            <th style="width:80px;">Tipo</th>
+            <th>Categoría / Concepto</th>
+            <th>Reserva</th>
+            <th style="text-align:right;">Monto</th>
+            <th>Método</th>
+            <th>Usuario</th>
+            <th style="width:70px;">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-libro">
+          {% set ns = namespace(fecha_actual='') %}
+          {% for m in movimientos %}
+
+          {% if m.fecha_pago != ns.fecha_actual %}
+          {% set ns.fecha_actual = m.fecha_pago %}
+          <tr class="fila-fecha-sep" data-skip="1">
+            <td colspan="8" style="background:#f8fafc; padding:5px 16px;
+                font-size:0.75rem; font-weight:700; color:var(--text2);
+                letter-spacing:0.05em; border-bottom:1px solid var(--border);">
+              {{ m.fecha_pago }}
+            </td>
+          </tr>
+          {% endif %}
+
+          <tr class="fila-mov {% if m.estado == 'CANCELADO' %}fila-cancelada{% endif %}"
+              data-txt="{{ (m.concepto ~ ' ' ~ (m.nombre_cliente or '') ~ ' ' ~ (m.destino or '') ~ ' ' ~ (m.categoria or '')) | lower }}">
+            <td style="font-size:0.8rem; color:var(--text2); white-space:nowrap;">{{ m.fecha_pago }}</td>
+            <td>
+              {% if m.tipo_movimiento == 'INGRESO' %}
+                <span class="badge badge-green" style="font-size:0.7rem;">INGRESO</span>
+              {% else %}
+                <span class="badge badge-red" style="font-size:0.7rem;">EGRESO</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="font-size:0.875rem; font-weight:500;">{{ m.categoria or '—' }}</div>
+              <div style="font-size:0.78rem; color:var(--text2);">{{ m.concepto }}</div>
+              {% if m.tipo_egreso and m.tipo_egreso != 'NO APLICA' %}
+              <div style="font-size:0.72rem; color:var(--text2);">{{ m.tipo_egreso }}</div>
+              {% endif %}
+              {% if m.estado == 'CANCELADO' and m.motivo_anulacion %}
+              <div style="font-size:0.72rem; color:var(--danger);">✗ {{ m.motivo_anulacion }}</div>
+              {% endif %}
+            </td>
+            <td style="font-size:0.82rem;">
+              {% if m.id_reserva %}
+                <a href="/bitacora/{{ m.id_reserva }}" style="color:var(--primary); text-decoration:none;">
+                  <div style="font-weight:600;">#{{ m.id_reserva }}</div>
+                  {% if m.nombre_cliente %}
+                  <div style="font-size:0.75rem; color:var(--text2);">{{ m.nombre_cliente }}</div>
+                  {% endif %}
+                  {% if m.destino %}
+                  <div style="font-size:0.75rem; color:var(--text2);">{{ m.destino }}</div>
+                  {% endif %}
+                </a>
+              {% else %}—{% endif %}
+            </td>
+            <td style="text-align:right; font-weight:600; white-space:nowrap;
+                       color:{% if m.tipo_movimiento == 'INGRESO' %}var(--primary){% else %}var(--danger){% endif %};">
+              {% if m.tipo_movimiento == 'EGRESO' %}−{% endif %}
+              ${{ '{:,.2f}'.format(m.monto) }}
+              <div style="font-size:0.72rem; font-weight:400; color:var(--text2);">{{ m.moneda }}</div>
+            </td>
+            <td style="font-size:0.8rem; color:var(--text2);">{{ m.metodo_pago or '—' }}</td>
+            <td style="font-size:0.78rem; color:var(--text2);">{{ m.usuario_creador or '—' }}</td>
+            <td>
+              {% if m.estado == 'CANCELADO' %}
+                <span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
+              {% else %}
+                <span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Totales al pie -->
+    <div style="padding:12px 20px; border-top:2px solid var(--border);
+                display:flex; gap:24px; flex-wrap:wrap; background:#f8fafc;">
+      <span style="font-size:0.85rem;">
+        <strong>Ingresos:</strong>
+        <span class="money money-positive">${{ '{:,.2f}'.format(total_ingresos) }} {{ moneda_sel }}</span>
+      </span>
+      <span style="font-size:0.85rem;">
+        <strong>Egresos:</strong>
+        <span class="money" style="color:var(--danger);">${{ '{:,.2f}'.format(total_egresos) }} {{ moneda_sel }}</span>
+      </span>
+      <span style="font-size:0.85rem;">
+        <strong>Balance:</strong>
+        <span class="money {% if balance_neto >= 0 %}money-positive{% else %}money-negative{% endif %}">
+          ${{ '{:,.2f}'.format(balance_neto) }} {{ moneda_sel }}
+        </span>
+      </span>
+    </div>
+
+  </div>
+</div>
+
+{% else %}
+<div class="card">
+  <div style="padding:48px; text-align:center; color:var(--text2);">
+    No hay movimientos registrados para el período seleccionado.
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Anular movimiento por ID ── -->
+<div class="card" style="margin-top:20px;">
+  <div class="card-header">🚫 Anular movimiento por ID</div>
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="post" action="/libro-diario/anular-movimiento"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;"
+          onsubmit="return confirm('¿Confirmar anulación del movimiento #' + document.getElementById('inp-id-mov').value + '?');">
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">ID movimiento</label>
+        <input id="inp-id-mov" name="id_movimiento" type="number" min="1"
+               class="field-input" style="width:130px;" placeholder="Ej: 248" required>
+      </div>
+      <div style="flex:1; min-width:240px;">
+        <label class="field-label" style="display:block; margin-bottom:4px;">Motivo de anulación</label>
+        <input name="motivo" type="text" class="field-input" placeholder="Describe el motivo..." required
+               style="width:100%;">
+      </div>
+      <button type="submit" class="btn" style="background:var(--danger); color:white; align-self:flex-end; font-size:0.82rem;">
+        🚫 Anular
+      </button>
+    </form>
+  </div>
+</div>
+
+<style>
+.fila-cancelada td { opacity: 0.45; }
+.kpi-card { padding:16px 20px; }
+.kpi-label { font-size:0.78rem; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+.kpi-value { font-size:1.7rem; font-weight:700; line-height:1.1; }
+.kpi-sub   { font-size:0.75rem; color:var(--text2); margin-top:4px; }
+</style>
+
+<script>
+function setCustomPeriodo() {
+  document.getElementById('inp-periodo').value = 'custom';
+}
+
+function filtrarTabla(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#tbody-libro .fila-mov').forEach(tr => {
+    const txt = tr.dataset.txt || '';
+    tr.style.display = (!q || txt.includes(q)) ? '' : 'none';
+  });
+  // Ocultar separadores de fecha si todas las filas del día están ocultas
+  document.querySelectorAll('#tbody-libro .fila-fecha-sep').forEach(sep => {
+    let sig = sep.nextElementSibling;
+    let alguna = false;
+    while (sig && !sig.classList.contains('fila-fecha-sep')) {
+      if (sig.classList.contains('fila-mov') && sig.style.display !== 'none') alguna = true;
+      sig = sig.nextElementSibling;
+    }
+    sep.style.display = alguna ? '' : 'none';
+  });
+}
+</script>
+
+{% endblock %}

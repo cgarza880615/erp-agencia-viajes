@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}Rentabilidad por Operadora — ERP Agencia de Viajes{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="/admin" class="btn btn-outline" style="font-size:0.8rem;">← Admin</a>
+  <h1 class="page-title" style="margin:0; flex:1;">📊 Rentabilidad por Operadora</h1>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="get" action="/admin/rentabilidad"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Mes</label>
+        <select name="mes" class="field-select" style="width:140px;">
+          {% for k, v in meses_dict.items() %}
+          <option value="{{ k }}" {% if mes == k %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Año</label>
+        <select name="anio" class="field-select" style="width:100px;">
+          {% for a in anios %}
+          <option value="{{ a }}" {% if anio == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary" style="font-size:0.82rem; align-self:flex-end;">
+        🔍 Filtrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Itinerarios por operadora -->
+{% if itin %}
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">✈️ Itinerarios creados</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Operadora</th>
+        <th style="text-align:right;">Itinerarios</th>
+        <th style="text-align:right;">Venta Total</th>
+        <th style="text-align:right;">Utilidad</th>
+        <th style="text-align:right;">Cobrado</th>
+        <th style="text-align:right;">% Cobrado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set total_itin_n = itin | sum(attribute='Itinerarios') %}
+      {% set total_itin_v = itin | sum(attribute='Venta_Total') %}
+      {% set total_itin_u = itin | sum(attribute='Utilidad') %}
+      {% set total_itin_c = itin | sum(attribute='Cobrado') %}
+      {% for r in itin %}
+      <tr>
+        <td><strong>{{ r.Operadora or '(sin usuario)' }}</strong></td>
+        <td style="text-align:right;">{{ r.Itinerarios }}</td>
+        <td style="text-align:right; font-weight:600; color:var(--primary);">${{ '{:,.0f}'.format(r.Venta_Total) }}</td>
+        <td style="text-align:right; color:var(--primary);">${{ '{:,.0f}'.format(r.Utilidad) }}</td>
+        <td style="text-align:right;">${{ '{:,.0f}'.format(r.Cobrado) }}</td>
+        <td style="text-align:right; font-size:0.82rem; color:var(--text2);">
+          {% if r.Venta_Total > 0 %}{{ '{:.0f}'.format(r.Cobrado / r.Venta_Total * 100) }}%{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="font-weight:700; border-top:2px solid var(--border);">
+        <td>TOTAL</td>
+        <td style="text-align:right;">{{ total_itin_n }}</td>
+        <td style="text-align:right; color:var(--primary);">${{ '{:,.0f}'.format(total_itin_v) }}</td>
+        <td style="text-align:right; color:var(--primary);">${{ '{:,.0f}'.format(total_itin_u) }}</td>
+        <td style="text-align:right;">${{ '{:,.0f}'.format(total_itin_c) }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  {% if itin | length > 1 %}
+  <div style="padding:16px 24px 20px;">
+    <canvas id="chart-itin" style="max-height:200px;"></canvas>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="card" style="margin-bottom:20px;">
+  <div style="padding:30px; text-align:center; color:var(--text2);">Sin itinerarios en este período.</div>
+</div>
+{% endif %}
+
+<!-- Cobros por operadora -->
+{% if cobros %}
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">💰 Cobros y pagos registrados</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Operadora</th>
+        <th style="text-align:right;">Movimientos</th>
+        <th style="text-align:right;">Ingresos cobrados</th>
+        <th style="text-align:right;">Egresos pagados</th>
+        <th style="text-align:right;">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in cobros %}
+      <tr>
+        <td><strong>{{ r.Operadora or '(sistema)' }}</strong></td>
+        <td style="text-align:right;">{{ r.Movimientos }}</td>
+        <td style="text-align:right; color:var(--primary); font-weight:600;">${{ '{:,.0f}'.format(r.Ingresos) }}</td>
+        <td style="text-align:right; color:var(--danger);">${{ '{:,.0f}'.format(r.Egresos) }}</td>
+        <td style="text-align:right; font-weight:600;
+            color:{% if r.Ingresos - r.Egresos >= 0 %}var(--primary){% else %}var(--danger){% endif %};">
+          ${{ '{:,.0f}'.format(r.Ingresos - r.Egresos) }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Cotizaciones por operadora -->
+{% if cot %}
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">📄 Cotizaciones</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Operadora</th>
+        <th style="text-align:right;">Cotizaciones</th>
+        <th style="text-align:right;">Convertidas</th>
+        <th style="text-align:right;">Tasa conversión</th>
+        <th style="text-align:right;">Venta convertida</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in cot %}
+      <tr>
+        <td><strong>{{ r.Operadora or '(sistema)' }}</strong></td>
+        <td style="text-align:right;">{{ r.Cotizaciones }}</td>
+        <td style="text-align:right;">{{ r.Convertidas }}</td>
+        <td style="text-align:right; font-weight:600;
+            color:{% if r.Cotizaciones > 0 and r.Convertidas / r.Cotizaciones >= 0.5 %}var(--primary){% else %}var(--warning){% endif %};">
+          {% if r.Cotizaciones > 0 %}{{ '{:.0f}'.format(r.Convertidas / r.Cotizaciones * 100) }}%{% else %}—{% endif %}
+        </td>
+        <td style="text-align:right; color:var(--primary); font-weight:600;">${{ '{:,.0f}'.format(r.Venta_Convertida) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if cot | length > 1 %}
+  <div style="padding:16px 24px 20px;">
+    <canvas id="chart-cot" style="max-height:180px;"></canvas>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if itin | length > 1 or cot | length > 1 %}
+<script>
+{% if itin | length > 1 %}
+new Chart(document.getElementById('chart-itin'), {
+  type: 'bar',
+  data: {
+    labels: [{% for r in itin %}'{{ r.Operadora or "(sin usuario)" }}'{% if not loop.last %},{% endif %}{% endfor %}],
+    datasets: [
+      {
+        label: 'Venta Total',
+        data: [{% for r in itin %}{{ r.Venta_Total | int }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: 'rgba(0,113,204,0.75)',
+        borderRadius: 4,
+      },
+      {
+        label: 'Utilidad',
+        data: [{% for r in itin %}{{ r.Utilidad | int }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: 'rgba(39,174,96,0.75)',
+        borderRadius: 4,
+      },
+      {
+        label: 'Cobrado',
+        data: [{% for r in itin %}{{ r.Cobrado | int }}{% if not loop.last %},{% endif %}{% endfor %}],
+        backgroundColor: 'rgba(100,116,139,0.5)',
+        borderRadius: 4,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } },
+    scales: {
+      y: { ticks: { callback: v => '$' + v.toLocaleString('es-MX') } },
+      x: { ticks: { font: { size: 11 } } }
+    }
+  }
+});
+{% endif %}
+
+{% if cot | length > 1 %}
+new Chart(document.getElementById('chart-cot'), {
+  type: 'bar',
+  data: {
+    labels: [{% for r in cot %}'{{ r.Operadora or "(sistema)" }}'{% if not loop.last %},{% endif %}{% endfor %}],
+    datasets: [{
+      label: 'Tasa de conversión %',
+      data: [{% for r in cot %}{% if r.Cotizaciones > 0 %}{{ (r.Convertidas / r.Cotizaciones * 100) | round | int }}{% else %}0{% endif %}{% if not loop.last %},{% endif %}{% endfor %}],
+      backgroundColor: [{% for r in cot %}'{% if r.Cotizaciones > 0 and r.Convertidas / r.Cotizaciones >= 0.5 %}rgba(39,174,96,0.75){% else %}rgba(234,179,8,0.75){% endif %}'{% if not loop.last %},{% endif %}{% endfor %}],
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { max: 100, ticks: { callback: v => v + '%' } },
+      x: { ticks: { font: { size: 11 } } }
+    }
+  }
+});
+{% endif %}
+</script>
+{% endif %}
+
+{% endblock %}

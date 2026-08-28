@@ -1,0 +1,616 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ accion }}" id="form-cot">
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="{% if cot and cot.id_cotizacion %}/cotizaciones/{{ cot.id_cotizacion }}{% else %}/cotizaciones{% endif %}"
+     class="btn btn-outline" style="font-size:0.8rem;">← Atrás</a>
+  <h1 class="page-title" style="margin:0;">{{ titulo }}</h1>
+  <button type="submit" class="btn btn-primary" style="margin-left:auto;">💾 Guardar Cotización</button>
+</div>
+
+{% if error %}
+<div class="alerta-inline alerta-critica" style="margin-bottom:20px;">⚠️ {{ error }}</div>
+{% endif %}
+
+<!-- Cliente + Destino -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">👤 Cliente y Destino</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Cliente *</label>
+        <select name="id_cliente" class="field-select" required>
+          <option value="">Seleccionar cliente...</option>
+          {% for c in clientes %}
+          <option value="{{ c.id_cliente }}"
+            {% if cot and cot.id_cliente == c.id_cliente %}selected{% endif %}>
+            {{ c.nombre }} — {{ c.id_cliente }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Destino *</label>
+        <input class="field-input" type="text" name="destino" list="dl_destinos" required
+               value="{{ cot.destino if cot else '' }}" placeholder="Ej: Cancún, Punta Cana...">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Origen</label>
+        <input class="field-input" type="text" name="origen"
+               value="{{ cot.origen if cot else 'Monterrey' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Moneda</label>
+        <select name="moneda" class="field-select">
+          <option value="MXN" {% if not cot or (cot.moneda or 'MXN') == 'MXN' %}selected{% endif %}>MXN — Pesos</option>
+          <option value="USD" {% if cot and cot.moneda == 'USD' %}selected{% endif %}>USD — Dólares</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Adultos</label>
+        <input class="field-input" type="number" name="num_adultos" min="1" value="{{ cot.num_adultos if cot else 1 }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Menores</label>
+        <input class="field-input" type="number" name="num_menores" min="0" value="{{ cot.num_menores if cot else 0 }}">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Fechas -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📅 Fechas</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Fecha de salida *</label>
+        <input class="field-input" type="date" name="fecha_salida" required
+               value="{{ cot.fecha_salida if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha de regreso *</label>
+        <input class="field-input" type="date" name="fecha_regreso" required
+               value="{{ cot.fecha_regreso if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Límite de pago (cliente)</label>
+        <input class="field-input" type="date" name="fecha_limite_pago"
+               value="{{ cot.fecha_limite_pago if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Límite al proveedor</label>
+        <input class="field-input" type="date" name="fecha_limite_proveedor"
+               value="{{ cot.fecha_limite_proveedor if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Vigencia de cotización (días)</label>
+        <input class="field-input" type="number" name="dias_vigencia" min="1" max="90"
+               value="{{ cot.dias_vigencia if cot else 7 }}">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Servicios y precios -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">💰 Servicios y precios al cliente</div>
+  <div class="card-body">
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; table-layout:fixed;">
+        <colgroup>
+          <col style="width:28%">
+          <col style="width:12%">
+          <col style="width:30%">
+          <col style="width:30%">
+        </colgroup>
+        <thead>
+          <tr>
+            <th style="text-align:left; padding:8px 10px; font-size:0.78rem; color:var(--text2);">SERVICIO</th>
+            <th style="text-align:center; padding:8px 10px; font-size:0.78rem; color:var(--text2);">INCLUYE</th>
+            <th style="text-align:right; padding:8px 10px; font-size:0.78rem; color:var(--text2);">PRECIO AL CLIENTE</th>
+            <th style="text-align:right; padding:8px 10px; font-size:0.78rem; color:var(--text2);">COSTO AGENCIA</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set servicios1 = [
+            ('vuelos',   '✈️ Vuelo',    'incluye_vuelo'),
+            ('tua',      '⛽ TUA',       'incluye_tua'),
+          ] %}
+          {% for key, label, chk_name in servicios1 %}
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px; font-size:0.875rem;">{{ label }}</td>
+            <td style="padding:8px 10px; text-align:center;">
+              <input type="checkbox" name="{{ chk_name }}" value="1"
+                     {% if cot and cot.get(chk_name) %}checked{% endif %}>
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="cobro_{{ key }}" id="cobro_{{ key }}" data-calc="cobro"
+                     value="{{ cot['cobro_' + key] if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="costo_{{ key }}" id="costo_{{ key }}" data-calc="costo"
+                     value="{{ cot['costo_' + key] if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+          </tr>
+          {% endfor %}
+          <!-- Hotel Opción 1 (siempre) -->
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px; font-size:0.875rem;">
+              🏨 Hotel — <strong>Opción 1</strong><br>
+              <input class="field-input" type="text" name="nombre_hotel" id="nombre_hotel" list="dl_hoteles"
+                     value="{{ cot.nombre_hotel if cot else '' }}" placeholder="Nombre del hotel"
+                     style="margin-top:4px; font-size:0.82rem; width:100%;">
+            </td>
+            <td style="padding:8px 10px; text-align:center;">—</td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="cobro_hotel" id="cobro_hotel" data-calc="cobro"
+                     value="{{ cot.cobro_hotel if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="costo_hotel" id="costo_hotel" data-calc="costo"
+                     value="{{ cot.costo_hotel if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+          </tr>
+          <!-- Toggle Opción 2 -->
+          <tr style="border-bottom:1px solid var(--border); background:var(--bg);">
+            <td colspan="4" style="padding:6px 10px;">
+              <label style="cursor:pointer; font-size:0.82rem; color:var(--primary);">
+                <input type="checkbox" id="chk_op2"
+                       {% if cot and (cot.hotel_op2_cobro or 0) > 0 %}checked{% endif %}
+                       onchange="toggleOp2()">
+                ➕ Agregar Opción 2 de hotel
+              </label>
+            </td>
+          </tr>
+          <tr id="row_op2" style="border-bottom:1px solid var(--border);
+              {% if not cot or not (cot.hotel_op2_cobro or 0) > 0 %}display:none;{% endif %}">
+            <td style="padding:8px 10px; font-size:0.875rem;">
+              🏨 Hotel — <strong>Opción 2</strong><br>
+              <input class="field-input" type="text" name="hotel_op2_nombre" id="hotel_op2_nombre" list="dl_hoteles"
+                     value="{{ cot.hotel_op2_nombre if cot else '' }}" placeholder="Nombre del hotel"
+                     style="margin-top:4px; font-size:0.82rem; width:100%;">
+            </td>
+            <td style="padding:8px 10px; text-align:center;">—</td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="hotel_op2_cobro" id="hotel_op2_cobro" data-calc-op="op2"
+                     value="{{ cot.hotel_op2_cobro if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00"
+                     oninput="recalcularOpciones()">
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="hotel_op2_costo" id="hotel_op2_costo"
+                     value="{{ cot.hotel_op2_costo if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+          </tr>
+          <!-- Toggle Opción 3 -->
+          <tr id="row_chk_op3" style="border-bottom:1px solid var(--border); background:var(--bg);
+              {% if not cot or not (cot.hotel_op2_cobro or 0) > 0 %}display:none;{% endif %}">
+            <td colspan="4" style="padding:6px 10px;">
+              <label style="cursor:pointer; font-size:0.82rem; color:var(--primary);">
+                <input type="checkbox" id="chk_op3"
+                       {% if cot and (cot.hotel_op3_cobro or 0) > 0 %}checked{% endif %}
+                       onchange="toggleOp3()">
+                ➕ Agregar Opción 3 de hotel
+              </label>
+            </td>
+          </tr>
+          <tr id="row_op3" style="border-bottom:1px solid var(--border);
+              {% if not cot or not (cot.hotel_op3_cobro or 0) > 0 %}display:none;{% endif %}">
+            <td style="padding:8px 10px; font-size:0.875rem;">
+              🏨 Hotel — <strong>Opción 3</strong><br>
+              <input class="field-input" type="text" name="hotel_op3_nombre" id="hotel_op3_nombre" list="dl_hoteles"
+                     value="{{ cot.hotel_op3_nombre if cot else '' }}" placeholder="Nombre del hotel"
+                     style="margin-top:4px; font-size:0.82rem; width:100%;">
+            </td>
+            <td style="padding:8px 10px; text-align:center;">—</td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="hotel_op3_cobro" id="hotel_op3_cobro" data-calc-op="op3"
+                     value="{{ cot.hotel_op3_cobro if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00"
+                     oninput="recalcularOpciones()">
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="hotel_op3_costo" id="hotel_op3_costo"
+                     value="{{ cot.hotel_op3_costo if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+          </tr>
+          {% set servicios2 = [
+            ('traslados','🚗 Traslados','incluye_traslado'),
+            ('tours',    '🎢 Tours',    ''),
+            ('adicionales','➕ Adicionales',''),
+          ] %}
+          {% for key, label, chk_name in servicios2 %}
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:8px 10px; font-size:0.875rem;">{{ label }}</td>
+            <td style="padding:8px 10px; text-align:center;">
+              {% if chk_name %}
+              <input type="checkbox" name="{{ chk_name }}" value="1"
+                     {% if cot and cot.get(chk_name) %}checked{% endif %}>
+              {% else %}—{% endif %}
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="cobro_{{ key }}" id="cobro_{{ key }}" data-calc="cobro"
+                     value="{{ cot['cobro_' + key] if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+            <td style="padding:8px 10px;">
+              <input class="field-input field-money" type="number" step="0.01" min="0"
+                     name="costo_{{ key }}" id="costo_{{ key }}" data-calc="costo"
+                     value="{{ cot['costo_' + key] if cot else '0' }}"
+                     style="text-align:right; width:100%;" placeholder="0.00">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="form-field" style="margin-top:10px; max-width:400px;">
+      <label class="field-label">Especificar adicionales</label>
+      <input class="field-input" type="text" name="especificar_adicionales"
+             value="{{ cot.especificar_adicionales if cot else '' }}" placeholder="Seguro, snorkel, etc.">
+    </div>
+    <!-- Preview multi-hotel (visible solo cuando hay Opción 2) -->
+    <div id="multi-hotel-preview" style="margin-top:12px; display:{% if cot and (cot.hotel_op2_cobro or 0) > 0 %}''{% else %}none{% endif %};">
+      <p style="font-size:0.78rem; font-weight:600; color:var(--primary); margin:0 0 6px;">Totales por opción:</p>
+      <table style="font-size:0.85rem; border-collapse:collapse;">
+        <thead><tr>
+          <th style="padding:4px 16px 4px 0; text-align:left;">Opción</th>
+          <th style="padding:4px 0; text-align:right;">Total {{ cot.moneda if cot else 'MXN' }}</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="total-calc" style="margin-top:12px;">
+      <span>Venta Total (Opción 1):</span>
+      <strong id="disp_venta" class="money money-positive">
+        ${{ '{:,.0f}'.format(cot.venta_total) if cot else '0' }}
+      </strong>
+      &nbsp;&nbsp;
+      <span style="font-size:0.85rem; color:var(--text2);">Costo: <strong id="disp_costo">
+        ${{ '{:,.0f}'.format(cot.costo_total) if cot else '0' }}
+      </strong></span>
+      &nbsp;&nbsp;
+      <span style="font-size:0.85rem; color:var(--text2);">Utilidad: <strong id="disp_utilidad">
+        ${{ '{:,.0f}'.format(cot.utilidad_proyectada) if cot else '0' }}
+      </strong></span>
+      <input type="hidden" id="venta_total" name="venta_total" value="{{ cot.venta_total if cot else '0' }}">
+    </div>
+  </div>
+</div>
+
+<!-- Proveedores -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🏢 Proveedores (referencia interna)</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Aerolínea</label>
+        <input class="field-input" type="text" name="aerolinea" list="dl_aerolineas"
+               value="{{ cot.aerolinea if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Mayorista</label>
+        <input class="field-input" type="text" name="mayorista" list="dl_mayoristas"
+               value="{{ cot.mayorista if cot else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Proveedor traslados</label>
+        <input class="field-input" type="text" name="proveedor_traslados" list="dl_prov_traslados"
+               value="{{ cot.proveedor_traslados if cot else '' }}">
+      </div>
+    </div>
+    <!-- Fechas y horarios de vuelo (obligatorios si hay precio o costo de vuelo) -->
+    <div id="wrap_vuelo_fechas" style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border);">
+      <p style="font-size:0.78rem; font-weight:600; color:var(--text2); margin:0 0 8px;">
+        ✈️ HORARIOS DE VUELO <span id="lbl_vuelo_req" style="color:var(--danger); display:none;">— requeridos</span>
+      </p>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="field-label">Fecha vuelo ida</label>
+          <input class="field-input" type="date" name="fecha_vuelo_ida" id="fecha_vuelo_ida"
+                 value="{{ cot.fecha_vuelo_ida if cot and cot.fecha_vuelo_ida else '' }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Hora vuelo ida</label>
+          <input class="field-input" type="time" name="hora_vuelo_ida" id="hora_vuelo_ida"
+                 value="{{ cot.hora_vuelo_ida if cot and cot.hora_vuelo_ida else '' }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Fecha vuelo vuelta</label>
+          <input class="field-input" type="date" name="fecha_vuelo_vuelta" id="fecha_vuelo_vuelta"
+                 value="{{ cot.fecha_vuelo_vuelta if cot and cot.fecha_vuelo_vuelta else '' }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Hora vuelo vuelta</label>
+          <input class="field-input" type="time" name="hora_vuelo_vuelta" id="hora_vuelo_vuelta"
+                 value="{{ cot.hora_vuelo_vuelta if cot and cot.hora_vuelo_vuelta else '' }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Equipaje incluido</label>
+          <input class="field-input" type="text" name="detalle_equipaje" list="dl_equipaje"
+                 value="{{ cot.detalle_equipaje if cot else '' }}"
+                 placeholder="Escribe o selecciona el equipaje incluido">
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Habitaciones -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🛏️ Habitaciones</div>
+  <div class="card-body">
+    <div class="form-field" style="width:160px; margin-bottom:12px;">
+      <label class="field-label">Núm. de habitaciones</label>
+      <input class="field-input" type="number" id="hab-n" name="hab_n"
+             min="0" max="10" value="{{ habitaciones|length }}"
+             oninput="habGenerarFilas()">
+    </div>
+    <table style="width:100%;" id="hab-tabla">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th>
+          <th>Tipo de habitación</th>
+          <th style="width:100px;">Personas</th>
+          <th style="width:110px;">Check-in</th>
+          <th>Descripción (opcional)</th>
+        </tr>
+      </thead>
+      <tbody id="hab-filas"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Plan de pagos -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📅 Plan de pagos sugerido</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Anticipo requerido</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               name="anticipo_requerido" id="anticipo_requerido"
+               value="{{ cot.anticipo_requerido if cot else '0' }}"
+               oninput="previewPlan()">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Tipo de plan</label>
+        <select name="tipo_plan" class="field-select" id="sel_tipo_plan" onchange="previewPlan()">
+          {% for tp in ['Sin Plan (Libre)', 'Semanal (Lunes)', 'Quincenal (15 y 30)', 'Mensual'] %}
+          <option value="{{ tp }}"
+            {% if cot and cot.tipo_plan == tp %}selected{% elif not cot and tp == 'Sin Plan (Libre)' %}selected{% endif %}>
+            {{ tp }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field" id="wrap_dia_mensual"
+           style="{{ 'display:none' if not cot or cot.tipo_plan != 'Mensual' else '' }}">
+        <label class="field-label">Día del mes</label>
+        <input class="field-input" type="number" name="dia_mensual" min="1" max="28"
+               value="{{ cot.dia_mensual if cot else 5 }}" oninput="previewPlan()">
+      </div>
+    </div>
+
+    <!-- Preview del plan -->
+    <div id="plan-preview" style="margin-top:14px; display:none;">
+      <p style="font-size:0.8rem; font-weight:600; color:var(--primary); margin:0 0 8px;">Vista previa del plan:</p>
+      <table id="plan-preview-table" style="font-size:0.85rem; width:auto;">
+        <thead>
+          <tr><th>Concepto</th><th>Fecha</th><th style="text-align:right;">Monto</th></tr>
+        </thead>
+        <tbody id="plan-preview-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Notas -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📝 Notas</div>
+  <div class="card-body">
+    <textarea class="field-input field-textarea" name="notas" rows="3"
+              placeholder="Condiciones, incluye/no incluye, observaciones...">{{ cot.notas if cot else '' }}</textarea>
+  </div>
+</div>
+
+<div style="display:flex; gap:12px; margin-bottom:40px;">
+  <button type="submit" class="btn btn-primary">💾 Guardar Cotización</button>
+  <a href="{% if cot and cot.id_cotizacion %}/cotizaciones/{{ cot.id_cotizacion }}{% else %}/cotizaciones{% endif %}"
+     class="btn btn-outline">Cancelar</a>
+</div>
+
+</form>
+
+<!-- Catálogos para autocompletar (hoteles/aerolíneas/mayoristas/proveedores) -->
+<datalist id="dl_destinos">{% for d in catalogo_destinos %}<option value="{{ d }}">{% endfor %}</datalist>
+<datalist id="dl_hoteles">{% for h in catalogo_hoteles %}<option value="{{ h }}">{% endfor %}</datalist>
+<datalist id="dl_aerolineas">{% for a in catalogo_aerolineas %}<option value="{{ a }}">{% endfor %}</datalist>
+<datalist id="dl_mayoristas">{% for m in catalogo_mayoristas %}<option value="{{ m }}">{% endfor %}</datalist>
+<datalist id="dl_prov_traslados">{% for p in catalogo_prov_traslados %}<option value="{{ p }}">{% endfor %}</datalist>
+<datalist id="dl_equipaje">{% for e in catalogo_equipaje %}<option value="{{ e }}">{% endfor %}</datalist>
+
+<script>
+const MONEDA = "{{ cot.moneda if cot else 'MXN' }}";
+const fmt = n => '$' + parseFloat(n || 0).toLocaleString('es-MX', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+
+function toggleOp2() {
+  const on = document.getElementById('chk_op2').checked;
+  document.getElementById('row_op2').style.display = on ? '' : 'none';
+  document.getElementById('row_chk_op3').style.display = on ? '' : 'none';
+  if (!on) {
+    document.getElementById('chk_op3').checked = false;
+    document.getElementById('row_op3').style.display = 'none';
+    document.getElementById('hotel_op2_cobro').value = '0';
+    document.getElementById('hotel_op2_costo').value = '0';
+    document.getElementById('hotel_op2_nombre').value = '';
+  }
+  recalcularOpciones();
+}
+
+function toggleOp3() {
+  const on = document.getElementById('chk_op3').checked;
+  document.getElementById('row_op3').style.display = on ? '' : 'none';
+  if (!on) {
+    document.getElementById('hotel_op3_cobro').value = '0';
+    document.getElementById('hotel_op3_costo').value = '0';
+    document.getElementById('hotel_op3_nombre').value = '';
+  }
+  recalcularOpciones();
+}
+
+function recalcularOpciones() {
+  const showOp2 = document.getElementById('chk_op2').checked;
+  const showOp3 = document.getElementById('chk_op3').checked;
+  const divOpts = document.getElementById('multi-hotel-preview');
+  if (!showOp2 || !divOpts) return;
+  const base = ['cobro_vuelos','cobro_tua','cobro_traslados','cobro_tours','cobro_adicionales']
+    .reduce((s, id) => s + (parseFloat(document.getElementById(id)?.value) || 0), 0);
+  const h1 = parseFloat(document.getElementById('cobro_hotel')?.value) || 0;
+  const h2 = parseFloat(document.getElementById('hotel_op2_cobro')?.value) || 0;
+  const h3 = parseFloat(document.getElementById('hotel_op3_cobro')?.value) || 0;
+  let html = `<tr><td><strong>Opción 1</strong></td><td style="text-align:right;">${fmt(base+h1)}</td></tr>`;
+  html    += `<tr><td><strong>Opción 2</strong></td><td style="text-align:right;">${fmt(base+h2)}</td></tr>`;
+  if (showOp3) html += `<tr><td><strong>Opción 3</strong></td><td style="text-align:right;">${fmt(base+h3)}</td></tr>`;
+  divOpts.querySelector('tbody').innerHTML = html;
+  divOpts.style.display = '';
+}
+
+function recalcular() {
+  const cobros = ['cobro_vuelos','cobro_tua','cobro_hotel','cobro_traslados','cobro_tours','cobro_adicionales']
+    .reduce((s, id) => s + (parseFloat(document.getElementById(id)?.value) || 0), 0);
+  const costos = ['costo_vuelos','costo_tua','costo_hotel','costo_traslados','costo_tours','costo_adicionales']
+    .reduce((s, id) => s + (parseFloat(document.getElementById(id)?.value) || 0), 0);
+  document.getElementById('venta_total').value = cobros.toFixed(2);
+  document.getElementById('disp_venta').textContent = fmt(cobros);
+  document.getElementById('disp_costo').textContent = fmt(costos);
+  const ut = cobros - costos;
+  const dU = document.getElementById('disp_utilidad');
+  dU.textContent = fmt(ut);
+  dU.style.color = ut >= 0 ? 'var(--primary)' : 'var(--danger)';
+  // Indicador de requerido para vuelo
+  const tieneVuelo = (parseFloat(document.getElementById('cobro_vuelos')?.value)||0) > 0 ||
+                     (parseFloat(document.getElementById('costo_vuelos')?.value)||0) > 0;
+  const lbl = document.getElementById('lbl_vuelo_req');
+  if (lbl) lbl.style.display = tieneVuelo ? '' : 'none';
+  recalcularOpciones();
+  previewPlan();
+}
+document.querySelectorAll('[data-calc]').forEach(el => el.addEventListener('input', recalcular));
+
+// Validación vuelo antes de enviar
+document.getElementById('form-cot').addEventListener('submit', function(e) {
+  const cobV = parseFloat(document.getElementById('cobro_vuelos')?.value) || 0;
+  const cosV = parseFloat(document.getElementById('costo_vuelos')?.value) || 0;
+  if (cobV > 0 || cosV > 0) {
+    const fida = document.getElementById('fecha_vuelo_ida')?.value;
+    const hida = document.getElementById('hora_vuelo_ida')?.value;
+    const fvta = document.getElementById('fecha_vuelo_vuelta')?.value;
+    const hvta = document.getElementById('hora_vuelo_vuelta')?.value;
+    if (!fida || !hida || !fvta || !hvta) {
+      e.preventDefault();
+      alert('⚠️ La cotización incluye vuelo. Completa las 4 fechas y horas de vuelo en la sección Proveedores.');
+      document.getElementById('fecha_vuelo_ida').scrollIntoView({behavior:'smooth', block:'center'});
+    }
+  }
+});
+
+document.getElementById('sel_tipo_plan').addEventListener('change', function() {
+  document.getElementById('wrap_dia_mensual').style.display = this.value === 'Mensual' ? '' : 'none';
+  previewPlan();
+});
+
+function previewPlan() {
+  const tipo     = document.getElementById('sel_tipo_plan').value;
+  const venta    = parseFloat(document.getElementById('venta_total').value) || 0;
+  const anticipo = parseFloat(document.getElementById('anticipo_requerido').value) || 0;
+  const flim     = document.querySelector('input[name=fecha_limite_pago]')?.value;
+  const diaMen   = parseInt(document.querySelector('input[name=dia_mensual]')?.value) || 5;
+  const div      = document.getElementById('plan-preview');
+  const tbody    = document.getElementById('plan-preview-body');
+
+  if (tipo === 'Sin Plan (Libre)' || !flim || venta <= 0) { div.style.display = 'none'; return; }
+
+  const saldo    = venta - anticipo;
+  const limite   = new Date(flim + 'T00:00:00');
+  const hoy      = new Date();
+  const fechas   = [];
+  let curr       = new Date(hoy); curr.setDate(curr.getDate() + 1);
+
+  while (curr <= limite) {
+    const d = curr.getDay(), day = curr.getDate();
+    const lastDay = new Date(curr.getFullYear(), curr.getMonth() + 1, 0).getDate();
+    if (tipo === 'Semanal (Lunes)' && d === 1) fechas.push(new Date(curr));
+    else if (tipo === 'Quincenal (15 y 30)' && (day === 15 || day === lastDay)) fechas.push(new Date(curr));
+    else if (tipo === 'Mensual' && day === diaMen) fechas.push(new Date(curr));
+    curr.setDate(curr.getDate() + 1);
+  }
+  if (!fechas.length) fechas.push(limite);
+
+  const monto = saldo / fechas.length;
+  const filas = [];
+  if (anticipo > 0) filas.push(['💳 Anticipo al confirmar', 'Al firmar', anticipo]);
+  fechas.forEach((f, i) => filas.push([`Parcialidad #${i+1}`, f.toISOString().slice(0,10), monto]));
+  filas.push(['📊 TOTAL', '', venta]);
+
+  tbody.innerHTML = filas.map(([con, fec, mon]) =>
+    `<tr><td style="padding:3px 10px;">${con}</td><td style="padding:3px 10px; color:var(--text2);">${fec}</td>
+     <td style="padding:3px 10px; text-align:right; font-weight:${fec===''?'700':'400'};">${fmt(mon)} ${MONEDA}</td></tr>`
+  ).join('');
+  div.style.display = 'block';
+}
+
+previewPlan();
+
+(function() {
+  if (!document.getElementById('hab-filas')) return;
+
+  const habIniciales = [
+    {% for h in habitaciones %}
+    {tipo: {{ h.tipo_habitacion|tojson }}, personas: {{ h.num_personas }}, checkin: {{ (h.hora_checkin or '15:00')|tojson }}, descripcion: {{ (h.descripcion or '')|tojson }}},
+    {% endfor %}
+  ];
+
+  function habGenerarFilas() {
+    const n = parseInt(document.getElementById('hab-n').value) || 0;
+    const tbody = document.getElementById('hab-filas');
+    tbody.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const ini = habIniciales[i - 1] || {tipo: '', personas: 2, checkin: '15:00', descripcion: ''};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="text" name="hab_tipo_${i}" required
+                   value="${ini.tipo.replace(/"/g, '&quot;')}" placeholder="Ej. Junior Suite"></td>
+        <td><input class="field-input" type="number" name="hab_personas_${i}" min="1" value="${ini.personas}"></td>
+        <td><input class="field-input" type="text" name="hab_checkin_${i}" value="${ini.checkin.replace(/"/g, '&quot;')}"></td>
+        <td><input class="field-input" type="text" name="hab_descripcion_${i}"
+                   value="${ini.descripcion.replace(/"/g, '&quot;')}" placeholder="Ej. Vista al mar"></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  window.habGenerarFilas = habGenerarFilas;
+  habGenerarFilas();
+})();
+</script>
+{% endblock %}

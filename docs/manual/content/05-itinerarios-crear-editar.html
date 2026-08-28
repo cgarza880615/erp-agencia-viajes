@@ -1,0 +1,53 @@
+<div class="crumb"><a href="index.html">Manual</a> / Itinerarios — Crear y Editar</div>
+<div class="eyebrow">Módulo 5 · 1 de 3 sobre Itinerarios</div>
+<h1>🗂️ Itinerarios — Crear y Editar</h1>
+<p class="lede">Un itinerario es un viaje real ya vendido. Es la tabla más grande del sistema — casi todo lo demás (cobros, pagos a proveedor, PDFs) cuelga de aquí.</p>
+
+<h2>Filtros de estado</h2>
+<table class="field-ref">
+  <tr><th>Filtro</th><th>Qué muestra</th></tr>
+  <tr><td>Próximos — Pendientes de pago</td><td>Viajes activos, con salida futura, que aún deben saldo al cliente.</td></tr>
+  <tr><td>Próximos — Liquidados</td><td>Viajes activos con salida futura ya cobrados al 100%.</td></tr>
+  <tr><td>Histórico Sano</td><td>Ya regresaron, cliente liquidado, proveedores pagados, check-ins hechos — todo cerrado bien.</td></tr>
+  <tr><td>Irregulares</td><td>Ya regresaron pero falta algo: saldo del cliente, pago a proveedor, o check-in.</td></tr>
+  <tr><td>Cancelado / Incobrable</td><td>Viajes dados de baja.</td></tr>
+</table>
+
+<h2>Crear un itinerario nuevo</h2>
+<ol class="steps">
+  <li><div class="step-body"><strong>Elige el cliente</strong> — si tiene viajeros frecuentes guardados, aparecen para agregarlos con un clic.</div></li>
+  <li><div class="step-body"><strong>(Opcional) Asígnalo a un Grupo de Viaje</strong> si es parte de un viaje grupal — ver <a href="08-grupos-viaje.html">Grupos de Viaje</a>.</div></li>
+  <li><div class="step-body"><strong>Captura Destino, fechas de salida/regreso</strong> y las fechas límite de liquidación y de pago a proveedor.</div></li>
+  <li><div class="step-body"><strong>Llena Cobros al cliente y Costos internos</strong> por cada servicio (vuelos, TUA, hotel, traslados, tours, adicionales) — la Venta Total y el Costo Total se calculan solos.</div></li>
+  <li><div class="step-body"><strong>Captura Proveedores y Localizadores</strong>: aerolínea, mayorista, hotel, localizadores — esto es lo que ven las operadoras el día del viaje.</div></li>
+  <li><div class="step-body"><strong>Crea el itinerario.</strong> El número de reserva (#) se asigna solo.</div></li>
+</ol>
+
+<div class="callout note">
+  <strong>Nota</strong>
+  "Costos internos" nunca lo ve el cliente — solo se usa para calcular la utilidad y para saber cuánto hay que pagarle a cada proveedor.
+</div>
+
+<h2>Editar un itinerario existente</h2>
+<p>Desde el detalle del itinerario, el botón <strong>"Editar"</strong> (arriba a la derecha) abre el mismo formulario con los datos ya cargados.</p>
+
+<div class="callout warning">
+  <strong>Candado de seguridad</strong>
+  Si un servicio (por ejemplo, Vuelo) <strong>ya tiene un pago a proveedor registrado</strong>, el sistema bloquea cualquier cambio a ese costo específico desde este formulario y te avisa por qué — para que nunca se descuadre el semáforo de proveedores con la realidad. Los demás campos se guardan normal.
+</div>
+
+<p>Cambiar un costo (que aún no tenga pago registrado) ajusta automáticamente el Costo Total y la Utilidad — sin tocar lo que el cliente debe pagar (Venta Total).</p>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>Quiero corregir el costo de un servicio pero el sistema no me deja, ¿por qué?</summary>
+  <p class="faq-body">Es el candado de seguridad: si ese servicio ya tiene un pago a proveedor registrado, no se puede cambiar el costo desde Editar (haría que el semáforo de proveedores ya no cuadre con lo pagado). La forma correcta es anular el pago a proveedor primero (con motivo, queda en auditoría) y volver a registrarlo con el monto correcto.</p>
+</details>
+<details class="faq">
+  <summary>¿Editar cambia lo que el cliente ya pagó o su plan de pagos?</summary>
+  <p class="faq-body">No. Editar solo ajusta Costo Total (interno) y Utilidad. Lo que el cliente debe pagar (Venta Total) y su plan de pagos existente no se tocan aquí — eso se maneja en <a href="06-itinerarios-cobros-pagos.html">Cobros y Pagos</a>.</p>
+</details>
+<details class="faq">
+  <summary>¿Qué es "Paquete Global" y cuándo lo marco?</summary>
+  <p class="faq-body">Es para cuando compraste el viaje completo a un solo proveedor por un precio cerrado (todo incluido), en vez de armarlo servicio por servicio. Al marcarlo, se oculta el desglose por Vuelo/Hotel/etc. y solo capturas un cobro y un costo totales.</p>
+</details>

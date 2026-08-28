@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente.nombre }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="/clientes" class="btn btn-outline" style="font-size:0.8rem;">← Clientes</a>
+  <div style="flex:1;">
+    <h1 class="page-title" style="margin:0;">👤 {{ cliente.nombre }}</h1>
+    <p style="color:var(--text2); font-size:0.85rem; margin-top:4px;">
+      <span style="font-family:monospace; background:var(--bg); padding:2px 8px; border-radius:4px; font-size:0.8rem;">{{ cliente.id_cliente }}</span>
+      {% if edad %}&nbsp;·&nbsp; {{ edad }} años{% endif %}
+    </p>
+  </div>
+  <a href="/clientes/{{ cliente.id_cliente }}/editar" class="btn btn-outline">✏️ Editar</a>
+  <a href="/bitacora/nueva?id_cliente={{ cliente.id_cliente }}" class="btn btn-primary">+ Nueva Reserva</a>
+</div>
+
+<!-- KPIs -->
+<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:14px; margin-bottom:20px;">
+  <div class="card" style="padding:16px 20px; text-align:center;">
+    <div style="font-size:1.8rem; font-weight:700; color:var(--primary);">{{ total_viajes }}</div>
+    <div style="font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Viajes totales</div>
+  </div>
+  <div class="card" style="padding:16px 20px; text-align:center;">
+    <div style="font-size:1.8rem; font-weight:700; color:{% if viajes_activos > 0 %}var(--primary){% else %}var(--text2){% endif %};">{{ viajes_activos }}</div>
+    <div style="font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Activos ahora</div>
+  </div>
+  <div class="card" style="padding:16px 20px; text-align:center;">
+    <div style="font-size:1.4rem; font-weight:700; color:var(--primary);">${{ "{:,.0f}".format(gasto_total) }}</div>
+    <div style="font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Gasto histórico MXN</div>
+  </div>
+  <div class="card" style="padding:16px 20px; text-align:center;">
+    <div style="font-size:1.4rem; font-weight:700; color:{% if deuda_activa > 0.01 %}var(--danger){% else %}var(--primary){% endif %};">
+      {% if deuda_activa > 0.01 %}${{ "{:,.0f}".format(deuda_activa) }}{% else %}✅ Al corriente{% endif %}
+    </div>
+    <div style="font-size:0.78rem; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px;">Deuda activa</div>
+  </div>
+</div>
+
+<!-- Datos de contacto -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">📋 Datos de contacto</div>
+  <div class="card-body">
+    <dl class="datos-list">
+      <dt>Teléfono</dt>
+      <dd>
+        {% if cliente.telefono %}
+          <a href="tel:{{ cliente.codigo_pais }}{{ cliente.telefono | replace('-','') }}"
+             style="color:var(--primary);">
+            {{ cliente.codigo_pais or '+52' }} {{ cliente.telefono }}
+          </a>
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Email</dt>
+      <dd>
+        {% if cliente.email %}
+          <a href="mailto:{{ cliente.email }}" style="color:var(--primary);">{{ cliente.email }}</a>
+        {% else %}—{% endif %}
+      </dd>
+      <dt>Fecha nacimiento</dt>
+      <dd>{{ cliente.fecha_nacimiento or '—' }}{% if edad %} &nbsp;<span style="color:var(--text2); font-size:0.85rem;">({{ edad }} años)</span>{% endif %}</dd>
+    </dl>
+  </div>
+</div>
+
+<!-- Viajeros frecuentes -->
+{% with id_cliente=cliente.id_cliente %}
+{% include "acompanantes_section.html" %}
+{% endwith %}
+
+<!-- Historial de reservas -->
+<div class="card" style="margin-bottom:32px;">
+  <div class="card-header" style="justify-content:space-between;">
+    <span>✈️ Historial de reservas</span>
+    <a href="/bitacora/nueva?id_cliente={{ cliente.id_cliente }}"
+       class="btn btn-primary" style="font-size:0.8rem; padding:5px 12px;">+ Nueva</a>
+  </div>
+
+  {% if reservas %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Destino</th>
+        <th>Salida</th>
+        <th>Regreso</th>
+        <th>Estado</th>
+        <th>Venta</th>
+        <th>Saldo</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reservas %}
+      <tr>
+        <td style="font-size:0.8rem; color:var(--text2);">#{{ r.id_reserva }}</td>
+        <td><strong>{{ r.destino }}</strong></td>
+        <td style="font-size:0.875rem; white-space:nowrap;">{{ r.fecha_salida }}</td>
+        <td style="font-size:0.875rem; white-space:nowrap;">{{ r.fecha_regreso }}</td>
+        <td>
+          {% if r.estado == 'ACTIVO' %}
+            <span class="badge badge-green">ACTIVO</span>
+          {% elif r.estado == 'TERMINADO' %}
+            <span class="badge badge-blue">TERMINADO</span>
+          {% elif r.estado == 'CANCELADO' %}
+            <span class="badge badge-red">CANCELADO</span>
+          {% else %}
+            <span class="badge">{{ r.estado }}</span>
+          {% endif %}
+        </td>
+        <td class="money">${{ "{:,.0f}".format(r.venta_total or 0) }} {{ r.moneda }}</td>
+        <td class="money {% if (r.saldo_vivo or 0) > 0.01 %}money-negative{% else %}money-positive{% endif %}">
+          {% if (r.saldo_vivo or 0) > 0.01 %}
+            ${{ "{:,.0f}".format(r.saldo_vivo) }}
+          {% else %}
+            ✅ Liquidado
+          {% endif %}
+        </td>
+        <td>
+          <a href="/bitacora/{{ r.id_reserva }}" class="btn btn-outline"
+             style="font-size:0.78rem; padding:4px 10px;">Ver →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:32px; text-align:center; color:var(--text2);">
+    Sin reservas registradas para este cliente.
+    <br>
+    <a href="/bitacora/nueva?id_cliente={{ cliente.id_cliente }}"
+       class="btn btn-primary" style="margin-top:14px; display:inline-block;">+ Crear primera reserva</a>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

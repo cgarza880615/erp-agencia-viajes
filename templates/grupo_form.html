@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Nuevo Grupo — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<h1 class="page-title" style="margin-bottom:20px;">🧳 Nuevo Grupo de Viaje</h1>
+
+<div class="card">
+  <div class="card-body">
+    {% if error %}
+    <p style="color:var(--danger); font-size:0.85rem; margin-bottom:14px;">⚠️ {{ error }}</p>
+    {% endif %}
+    <form method="post" action="/grupos/nuevo">
+      <div class="form-field">
+        <label class="field-label">Nombre del Grupo *</label>
+        <input class="field-input" type="text" name="nombre_grupo" required placeholder="Ej: Hanal Pixán 2026">
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="field-label">Origen</label>
+          <input class="field-input" type="text" name="origen" value="Monterrey">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Destino *</label>
+          <input class="field-input" type="text" name="destino" list="dl_destinos" required>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Fecha Salida</label>
+          <input class="field-input" type="date" name="fecha_salida" value="{{ today }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Fecha Regreso</label>
+          <input class="field-input" type="date" name="fecha_regreso" value="{{ today }}">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Moneda</label>
+          <select class="field-select" name="moneda">
+            <option value="MXN">MXN</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Cupos Bloqueados</label>
+          <input class="field-input" type="number" name="cupos_bloqueados" min="1" value="10">
+        </div>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Descripción del Paquete Base (tours incluidos)</label>
+        <textarea class="field-input" name="descripcion_paquete" rows="2" placeholder="Ej: Incluye Pirámides, Xochimilco, Chapultepec, Antro"></textarea>
+      </div>
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="field-label">Precio Paquete Base por Pax ($)</label>
+          <input class="field-input field-money" type="number" name="precio_paquete_base" min="0" step="0.01" value="0">
+        </div>
+        <div class="form-field">
+          <label class="field-label">% Margen Deseado</label>
+          <input class="field-input" type="number" name="margen_deseado_pct" min="0" max="95" step="0.1" value="0">
+        </div>
+      </div>
+      <p style="font-size:0.8rem; color:var(--text2); margin:6px 0 16px;">
+        El presupuesto por categoría y la logística compartida (hotel, vuelos, traslados, tours) se agregan después, desde el detalle del grupo.
+      </p>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary">💾 Crear Grupo</button>
+        <a href="/grupos" class="btn btn-outline">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<datalist id="dl_destinos">{% for d in catalogo_destinos %}<option value="{{ d }}">{% endfor %}</datalist>
+
+{% endblock %}

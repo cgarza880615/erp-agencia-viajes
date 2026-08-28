@@ -1,0 +1,20 @@
+# Secretos y configuración local
+.env
+
+# Bases de datos (nunca se sube nada con datos reales)
+*.db
+*.db-shm
+*.db-wal
+first_run_credentials.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Backups locales de edición
+*.backup_*
+
+# Sistema
+.DS_Store

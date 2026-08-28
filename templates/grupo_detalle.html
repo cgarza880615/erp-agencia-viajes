@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}{{ grupo.nombre_grupo }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:12px; margin-bottom:8px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0;">🧳 {{ grupo.nombre_grupo }}</h1>
+  {% if grupo.pax_ocupados > grupo.cupos_bloqueados %}
+    <span class="badge badge-red">⚠️ {{ grupo.pax_ocupados }}/{{ grupo.cupos_bloqueados }} pax</span>
+  {% else %}
+    <span class="badge badge-green">{{ grupo.pax_ocupados }}/{{ grupo.cupos_bloqueados }} pax</span>
+  {% endif %}
+  {% if grupo.pendiente_total <= 0.01 %}
+    <span class="badge badge-green">🟢 Pagado al 100%</span>
+  {% else %}
+    <span class="badge badge-red">🔴 Pendiente {{ grupo.pendiente_total | moneda(grupo.moneda) }}</span>
+  {% endif %}
+</div>
+<p style="color:var(--text2); font-size:0.85rem; margin:0 0 20px;">
+  {{ grupo.destino }} · {{ grupo.fecha_salida }} a {{ grupo.fecha_regreso }}
+  {% if grupo.descripcion_paquete %} · 📦 {{ grupo.descripcion_paquete }}{% endif %}
+</p>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body" style="font-size:0.85rem; line-height:1.9;">
+    💰 Venta total: <strong class="money-positive">{{ grupo.venta_total_grupo | moneda(grupo.moneda) }}</strong>
+    &nbsp;·&nbsp; Cobrado: <strong>{{ grupo.cobrado_total_grupo | moneda(grupo.moneda) }}</strong><br>
+    💸 Presupuesto: <strong>{{ grupo.presupuesto_total | moneda(grupo.moneda) }}</strong>
+    &nbsp;·&nbsp; Pagado a proveedor: <strong>{{ grupo.pagado_total | moneda(grupo.moneda) }}</strong>
+    &nbsp;·&nbsp; Pendiente: <strong>{{ grupo.pendiente_total | moneda(grupo.moneda) }}</strong><br>
+    📊 Utilidad real del grupo: <strong>{{ grupo.utilidad_real | moneda(grupo.moneda) }}</strong><br>
+    💡 Venta sugerida por pax (orientativa, no forzosa): <strong>{{ grupo.venta_sugerida_pax | moneda(grupo.moneda) }}</strong>
+  </div>
+</div>
+
+<details style="margin-bottom:16px;">
+  <summary style="cursor:pointer; font-weight:600; color:var(--primary); font-size:0.875rem;">✏️ Editar datos generales del grupo</summary>
+  <div class="card" style="margin-top:10px;">
+    <div class="card-body">
+      <form method="post" action="/grupos/{{ grupo.id_grupo }}/editar">
+        <div class="form-field">
+          <label class="field-label">Nombre del Grupo</label>
+          <input class="field-input" type="text" name="nombre_grupo" value="{{ grupo.nombre_grupo }}">
+        </div>
+        <div class="form-grid">
+          <div class="form-field"><label class="field-label">Origen</label><input class="field-input" type="text" name="origen" value="{{ grupo.origen }}"></div>
+          <div class="form-field"><label class="field-label">Destino</label><input class="field-input" type="text" name="destino" list="dl_destinos" value="{{ grupo.destino }}"></div>
+          <div class="form-field"><label class="field-label">Fecha Salida</label><input class="field-input" type="date" name="fecha_salida" value="{{ grupo.fecha_salida }}"></div>
+          <div class="form-field"><label class="field-label">Fecha Regreso</label><input class="field-input" type="date" name="fecha_regreso" value="{{ grupo.fecha_regreso }}"></div>
+          <div class="form-field">
+            <label class="field-label">Moneda</label>
+            <select class="field-select" name="moneda">
+              <option value="MXN" {% if grupo.moneda == 'MXN' %}selected{% endif %}>MXN</option>
+              <option value="USD" {% if grupo.moneda == 'USD' %}selected{% endif %}>USD</option>
+            </select>
+          </div>
+          <div class="form-field"><label class="field-label">Cupos Bloqueados</label><input class="field-input" type="number" name="cupos_bloqueados" min="1" value="{{ grupo.cupos_bloqueados }}"></div>
+          <div class="form-field">
+            <label class="field-label">Estado</label>
+            <select class="field-select" name="estado">
+              {% for e in ["ACTIVO", "CERRADO", "CANCELADO"] %}
+              <option value="{{ e }}" {% if grupo.estado == e %}selected{% endif %}>{{ e }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Descripción del Paquete</label>
+          <textarea class="field-input" name="descripcion_paquete" rows="2">{{ grupo.descripcion_paquete or '' }}</textarea>
+        </div>
+        <div class="form-grid">
+          <div class="form-field"><label class="field-label">Precio Paquete Base por Pax ($)</label><input class="field-input field-money" type="number" name="precio_paquete_base" min="0" step="0.01" value="{{ grupo.precio_paquete_base }}"></div>
+          <div class="form-field"><label class="field-label">% Margen Deseado</label><input class="field-input" type="number" name="margen_deseado_pct" min="0" max="95" step="0.1" value="{{ grupo.margen_deseado_pct or 0 }}"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Guardar cambios generales</button>
+      </form>
+    </div>
+  </div>
+</details>
+
+{% with lineas=lineas_presupuesto, categorias=categorias, id_grupo=grupo.id_grupo %}
+{% include "presupuesto_grupo_section.html" %}
+{% endwith %}
+{% with lineas=lineas_logistica, tipos=tipos_logistica, date_cfg=date_cfg, reservas=reservas, id_grupo=grupo.id_grupo %}
+{% include "logistica_grupo_section.html" %}
+{% endwith %}
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">💳 Registrar Pago a Proveedor del Grupo</div>
+  <div class="card-body">
+    {% if lineas_presupuesto %}
+    <form method="post" action="/grupos/{{ grupo.id_grupo }}/pago-proveedor/registrar">
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="field-label">Línea de presupuesto</label>
+          <select class="field-select" name="id_presupuesto">
+            {% for l in lineas_presupuesto %}
+            <option value="{{ l.id_presupuesto }}">{{ l.categoria }} — {{ l.descripcion or 's/desc' }} ({{ l.monto_presupuestado | moneda(grupo.moneda) }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Monto ($)</label>
+          <input class="field-input field-money" type="number" name="monto" min="0" step="0.01" required>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Método de pago</label>
+          <select class="field-select" name="metodo_pago">
+            <option value="Transferencia">Transferencia</option>
+            <option value="Efectivo">Efectivo</option>
+            <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="font-size:0.875rem; margin-top:10px;">💾 Registrar Pago</button>
+    </form>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.875rem;">Sin líneas de presupuesto para registrar pago.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🧳 Reservas ligadas al grupo</div>
+  <div class="card-body">
+    {% if not reservas %}
+    <p style="color:var(--text2); font-size:0.875rem;">Aún no hay reservas ligadas a este grupo.</p>
+    {% else %}
+    <form method="post" action="/grupos/{{ grupo.id_grupo }}/aplicar-prorrateo">
+      <table style="width:100%; margin-bottom:14px;">
+        <thead>
+          <tr><th></th><th>Itin #</th><th>Cliente</th><th>Pax</th><th>Venta</th><th>Costo</th><th>Utilidad</th><th>Cobrado</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          {% for r in reservas %}
+          <tr>
+            <td>{% if r.estado == 'ACTIVO' %}<input type="checkbox" name="id_reserva" value="{{ r.id_reserva }}" checked>{% endif %}</td>
+            <td><a href="/bitacora/{{ r.id_reserva }}">#{{ r.id_reserva }}</a></td>
+            <td>{{ r.nombre }}</td>
+            <td>{{ r.num_pax }}</td>
+            <td class="money">{{ r.venta_total | moneda }}</td>
+            <td class="money">{{ r.costo_total | moneda }}</td>
+            <td class="money {% if r.utilidad < 0 %}money-negative{% else %}money-positive{% endif %}">{{ r.utilidad | moneda }}</td>
+            <td class="money">{{ r.cobrado_cliente | moneda }}</td>
+            <td>{{ r.estado }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-outline" style="font-size:0.8rem;">🔄 Aplicar prorrateo del grupo al costo de los seleccionados</button>
+      <p style="font-size:0.76rem; color:var(--text2); margin-top:6px;">Sobrescribe el costo capturado con el prorrateo actual del presupuesto — la utilidad reflejará el costo real. No toca los extras que ya tenga cada reserva.</p>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body" style="display:flex; gap:24px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:260px;">
+      <h4 style="margin:0 0 8px; font-size:0.9rem;">🔗 Vincular itinerario existente</h4>
+      <form method="post" action="/grupos/{{ grupo.id_grupo }}/vincular" style="display:flex; gap:8px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-field" style="margin:0;"><label class="field-label">Itin #</label><input class="field-input" type="number" name="id_reserva" min="1" required style="width:100px;"></div>
+        <div class="form-field" style="margin:0;"><label class="field-label">Pax</label><input class="field-input" type="number" name="num_pax" min="1" value="1" style="width:80px;"></div>
+        <button type="submit" class="btn btn-outline" style="font-size:0.8rem;">Vincular</button>
+      </form>
+    </div>
+    <div style="flex:1; min-width:220px;">
+      <h4 style="margin:0 0 8px; font-size:0.9rem;">➕ Crear itinerario en este grupo</h4>
+      <a href="/bitacora/nueva?id_grupo={{ grupo.id_grupo }}" class="btn btn-primary" style="font-size:0.85rem;">Crear Itinerario</a>
+    </div>
+  </div>
+</div>
+
+<a href="/grupos" class="btn btn-outline">← Volver a Grupos</a>
+
+<datalist id="dl_destinos">{% for d in catalogo_destinos %}<option value="{{ d }}">{% endfor %}</datalist>
+
+{% endblock %}

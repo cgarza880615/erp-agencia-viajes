@@ -1,0 +1,80 @@
+<table id="tabla-reservas">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Cliente</th>
+      <th class="col-hide-sm">Destino</th>
+      <th>Salida</th>
+      <th class="col-hide-sm">Regreso</th>
+      <th class="col-hide-sm">Venta Total</th>
+      <th class="col-hide-sm">Cobrado</th>
+      <th>Saldo</th>
+      <th>Estado</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in reservas %}
+    <tr>
+      <td><strong>#{{ r.id_reserva }}</strong></td>
+      <td>{{ r.nombre }}{% if r.id_grupo %} <span class="badge badge-blue" style="font-size:0.65rem;">🧳 {{ r.nombre_grupo }}</span>{% endif %}</td>
+      <td class="col-hide-sm">{{ r.destino }}</td>
+      <td>{{ r.fecha_salida }}</td>
+      <td class="col-hide-sm">{{ r.fecha_regreso }}</td>
+      <td class="money col-hide-sm">{{ r.venta_total | moneda(r.moneda) }}</td>
+      <td class="money money-positive col-hide-sm">{{ r.cobrado_cliente | moneda(r.moneda) }}</td>
+      <td class="money {% if r.saldo > 0 %}money-negative{% endif %}">
+        {{ r.saldo | moneda(r.moneda) }}
+      </td>
+      <td>
+        {% if r.estado == 'ACTIVO' %}
+          <span class="badge badge-green">ACTIVO</span>
+        {% elif r.estado == 'TERMINADO' %}
+          <span class="badge badge-blue">TERMINADO</span>
+        {% elif r.estado == 'CANCELADO' %}
+          <span class="badge badge-red">CANCELADO</span>
+        {% elif r.estado == 'INCOBRABLE' %}
+          <span class="badge" style="background:#6b21a8;color:#fff;">INCOBRABLE</span>
+        {% else %}
+          <span class="badge">{{ r.estado }}</span>
+        {% endif %}
+      </td>
+      <td>
+        <a href="/bitacora/{{ r.id_reserva }}" class="btn-ver">Ver →</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="10" style="text-align:center; padding:32px; color:var(--text2);">
+        Sin resultados para esta búsqueda.
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if hay_mas or page > 1 %}
+<div style="display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 20px; border-top:1px solid var(--border);">
+  {% if page > 1 %}
+  <button class="btn btn-outline"
+          style="font-size:0.82rem;"
+          hx-get="/bitacora/rows"
+          hx-include="#filtros-bitacora"
+          hx-vals='{"page": {{ page - 1 }}}'
+          hx-target="#tabla-wrapper"
+          hx-swap="innerHTML">← Anterior</button>
+  {% endif %}
+  <span style="font-size:0.8rem; color:var(--text2);">
+    Página {{ page }} &nbsp;·&nbsp; {{ total }} reserva(s)
+  </span>
+  {% if hay_mas %}
+  <button class="btn btn-outline"
+          style="font-size:0.82rem;"
+          hx-get="/bitacora/rows"
+          hx-include="#filtros-bitacora"
+          hx-vals='{"page": {{ page + 1 }}}'
+          hx-target="#tabla-wrapper"
+          hx-swap="innerHTML">Siguiente →</button>
+  {% endif %}
+</div>
+{% endif %}

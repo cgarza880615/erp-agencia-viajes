@@ -1,0 +1,68 @@
+<div id="seccion-acompanantes">
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">👨‍👩‍👧 Viajeros frecuentes ({{ acompanantes|length }})</div>
+  <div class="card-body" style="padding-bottom:0;">
+
+    {% if acompanantes %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Fecha de nacimiento</th>
+          <th>Parentesco</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in acompanantes %}
+        <tr>
+          <td>{{ a.nombre }}</td>
+          <td style="font-size:0.875rem;">{{ a.fecha_nacimiento or '—' }}</td>
+          <td style="font-size:0.875rem;">{{ a.parentesco or '—' }}</td>
+          <td>
+            <form method="post" action="/clientes/{{ id_cliente }}/acompanantes/{{ a.id_acompanante }}/eliminar"
+                  hx-post="/clientes/{{ id_cliente }}/acompanantes/{{ a.id_acompanante }}/eliminar"
+                  hx-target="#seccion-acompanantes" hx-swap="outerHTML"
+                  onsubmit="return confirm('¿Eliminar a {{ a.nombre }} de la lista?')">
+              <button type="submit" class="btn-icon-danger" title="Eliminar">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); margin:0 0 16px; font-size:0.875rem;">Sin viajeros frecuentes. Agrégalos aquí para pre-cargarlos en futuras reservas.</p>
+    {% endif %}
+
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:8px 0; font-size:0.875rem;">
+        + Agregar viajero frecuente
+      </summary>
+      <form method="post" action="/clientes/{{ id_cliente }}/acompanantes/agregar"
+            hx-post="/clientes/{{ id_cliente }}/acompanantes/agregar"
+            hx-target="#seccion-acompanantes" hx-swap="outerHTML"
+            style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Nombre completo *</label>
+            <input class="field-input" type="text" name="nombre" required placeholder="Nombre completo">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Fecha de nacimiento</label>
+            <input class="field-input" type="date" name="fecha_nacimiento">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Parentesco</label>
+            <input class="field-input" type="text" name="parentesco" placeholder="Ej: Esposa, Hijo, Amigo...">
+          </div>
+        </div>
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">Agregar</button>
+        </div>
+      </form>
+    </details>
+
+  </div>
+</div>
+</div>

@@ -1,0 +1,57 @@
+<div id="tabla-clientes">
+{% if clientes %}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Nombre</th>
+        <th>Teléfono</th>
+        <th>Email</th>
+        <th style="text-align:center;">Viajes</th>
+        <th style="text-align:center;">Activos</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr>
+        <td style="font-size:0.8rem; color:var(--text2); font-family:monospace;">{{ c.id_cliente }}</td>
+        <td><strong>{{ c.nombre }}</strong></td>
+        <td style="font-size:0.875rem;">
+          {% if c.telefono %}
+            {{ c.codigo_pais or '+52' }} {{ c.telefono }}
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-size:0.875rem;">{{ c.email or '—' }}</td>
+        <td style="text-align:center;">
+          <span class="badge badge-blue" style="font-size:0.75rem;">{{ c.total_viajes }}</span>
+        </td>
+        <td style="text-align:center;">
+          {% if c.viajes_activos > 0 %}
+            <span class="badge badge-green" style="font-size:0.75rem;">{{ c.viajes_activos }}</span>
+          {% else %}
+            <span style="color:var(--text2); font-size:0.8rem;">—</span>
+          {% endif %}
+        </td>
+        <td>
+          <a href="/clientes/{{ c.id_cliente }}" class="btn btn-outline"
+             style="font-size:0.78rem; padding:4px 10px;">Ver →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div style="padding:40px; text-align:center; color:var(--text2);">
+    {% if q %}
+      Sin resultados para "<strong>{{ q }}</strong>".
+    {% else %}
+      No hay clientes registrados. <a href="/clientes/nuevo" class="btn btn-primary" style="margin-left:12px;">+ Nuevo Cliente</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+</div>

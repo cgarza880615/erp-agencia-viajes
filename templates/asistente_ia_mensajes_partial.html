@@ -1,0 +1,40 @@
+{% if confirmacion_texto %}
+<div class="asistente_ia-confirmacion-banner">{{ confirmacion_texto }}</div>
+{% endif %}
+
+{% for m in mensajes %}
+<div class="asistente_ia-msg {{ 'user' if m.role == 'user' else 'assistant' }}">
+  <div class="asistente_ia-bubble">{{ m.texto }}</div>
+</div>
+{% else %}
+<p style="text-align:center; color:var(--text2); font-size:0.82rem; margin-top:24px;">
+  ¡Hola! Soy Asistente IA 👋 Pregúntame por un itinerario, un saldo, o pídeme que arme una cotización.
+</p>
+{% endfor %}
+
+{% if propuesta_cliente and propuesta_cliente.estado == 'PENDIENTE_CONFIRMACION' %}
+<div class="asistente_ia-propuesta-card">
+  <div class="asistente_ia-propuesta-titulo">👤 {{ 'Propuesta de edición de cliente' if propuesta_cliente.id_cliente_existente else 'Propuesta de cliente nuevo' }}</div>
+  <pre class="asistente_ia-propuesta-resumen">{{ propuesta_cliente.resumen_texto }}</pre>
+  <form hx-post="/asistente_ia/cliente/{{ propuesta_cliente.id }}/confirmar" hx-target="#asistente_ia-messages" hx-swap="innerHTML" hx-disabled-elt="find button">
+    <button type="submit" class="btn btn-primary" style="font-size:0.82rem;">✅ {{ 'Confirmar y actualizar' if propuesta_cliente.id_cliente_existente else 'Confirmar y registrar' }}</button>
+  </form>
+</div>
+{% endif %}
+
+{% if propuesta and propuesta.estado == 'PENDIENTE_CONFIRMACION' %}
+<div class="asistente_ia-propuesta-card">
+  <div class="asistente_ia-propuesta-titulo">📋 Propuesta de cotización</div>
+  <pre class="asistente_ia-propuesta-resumen">{{ propuesta.resumen_texto }}</pre>
+  <form hx-post="/asistente_ia/cotizacion/{{ propuesta.id }}/confirmar" hx-target="#asistente_ia-messages" hx-swap="innerHTML" hx-disabled-elt="find button">
+    <button type="submit" class="btn btn-primary" style="font-size:0.82rem;">✅ Confirmar y guardar</button>
+  </form>
+</div>
+{% endif %}
+
+<script>
+(function(){
+  var box = document.getElementById('asistente_ia-messages');
+  if (box) box.scrollTop = box.scrollHeight;
+})();
+</script>

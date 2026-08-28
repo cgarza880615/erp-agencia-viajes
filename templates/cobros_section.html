@@ -1,0 +1,220 @@
+<div id="seccion-cobros">
+<div class="card" style="margin-bottom:16px;">
+
+  <div class="card-header" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+    <span>💵 Cobros registrados</span>
+    <span style="font-size:0.8rem; font-weight:400; color:var(--text2);">
+      Total cobrado: <strong class="money-positive">{{ saldo.cobrado_activos | moneda(moneda) }}</strong>
+      &nbsp;·&nbsp;
+      Saldo: <strong class="{% if saldo.saldo_pendiente > 0 %}money-negative{% else %}money-positive{% endif %}">
+        {{ saldo.saldo_pendiente | moneda(moneda) }}
+      </strong>
+    </span>
+  </div>
+
+  <!-- Tabla de cobros -->
+  {% if cobros %}
+  <table>
+    <thead>
+      <tr>
+        <th>Concepto</th>
+        <th>Monto</th>
+        <th>Fecha</th>
+        <th>Método</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cobros %}
+      <tr>
+        <td>{{ c.concepto }}</td>
+        <td class="money money-positive">{{ c.monto | moneda(moneda) }}</td>
+        <td>{{ c.fecha_pago }}</td>
+        <td>{{ c.metodo_pago or '—' }}</td>
+        <td style="display:flex; gap:6px; align-items:center;">
+          <a href="/bitacora/{{ id_reserva }}/cobros/{{ c.id_movimiento }}/pdf"
+             target="_blank"
+             class="btn-icon"
+             title="Descargar recibo PDF"
+             style="text-decoration:none;">📄</a>
+          <button type="button" class="btn-icon-danger"
+                  title="Anular cobro"
+                  onclick="abrirAnular({{ c.id_movimiento }})">✕</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:20px; color:var(--text2); font-size:0.875rem;">Sin cobros registrados.</div>
+  {% endif %}
+
+  <!-- Formulario registrar cobro -->
+  <div style="padding:16px 20px; border-top:1px solid var(--border);">
+    <details open>
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:4px 0; font-size:0.875rem;">
+        + Registrar cobro
+      </summary>
+      <form id="form-cobro-{{ id_reserva }}"
+            method="post"
+            action="/bitacora/{{ id_reserva }}/cobros/registrar"
+            hx-post="/bitacora/{{ id_reserva }}/cobros/registrar"
+            hx-target="#seccion-cobros" hx-swap="outerHTML"
+            style="margin-top:14px;">
+
+        <div class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+
+          <div class="form-field">
+            <label class="field-label">Tipo de cobro</label>
+            <select name="tipo_cobro" class="field-select" id="sel-tipo-{{ id_reserva }}"
+                    onchange="toggleParcialidad({{ id_reserva }}, this.value)">
+              <option value="Anticipo">Anticipo</option>
+              <option value="Parcialidad">Parcialidad</option>
+              <option value="Abono">Abono libre</option>
+            </select>
+          </div>
+
+          <div class="form-field" id="wrap-parcialidad-{{ id_reserva }}" style="display:none;">
+            <label class="field-label">Parcialidad</label>
+            {% set pendientes = plan_pagos | selectattr("estado", "in", ("PENDIENTE", "PARCIAL")) | list %}
+            {% if pendientes %}
+            <select name="num_parcialidad" id="sel-parcialidad-{{ id_reserva }}"
+                    class="field-select"
+                    onchange="autoFillMontoParcialidad({{ id_reserva }}, this)">
+              <option value="">Seleccionar...</option>
+              {% for p in pendientes %}
+              <option value="{{ p.numero_pago }}" data-monto="{{ p.monto_esperado - p.monto_pagado }}">
+                Parcialidad #{{ p.numero_pago }} — {{ (p.monto_esperado - p.monto_pagado) | moneda(moneda) }} restantes
+              </option>
+              {% endfor %}
+            </select>
+            {% else %}
+            <select name="num_parcialidad" class="field-select" disabled>
+              <option>Sin parcialidades pendientes</option>
+            </select>
+            {% endif %}
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">Monto ({{ moneda }}) *</label>
+            <input class="field-input field-money" type="number" name="monto"
+                   id="inp-monto-{{ id_reserva }}"
+                   min="0.01" step="0.01" required placeholder="0.00"
+                   oninput="actualizarPreviewComision({{ id_reserva }})">
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">Fecha de pago *</label>
+            <input class="field-input" type="date" name="fecha_pago" value="{{ today }}" required>
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">Método de pago</label>
+            <select name="metodo_pago" class="field-select" id="sel-metodo-{{ id_reserva }}"
+                    onchange="toggleComision({{ id_reserva }}, this.value)">
+              <option value="Transferencia">Transferencia</option>
+              <option value="Efectivo">Efectivo</option>
+              <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
+            </select>
+          </div>
+
+          <div class="form-field" id="wrap-comision-{{ id_reserva }}" style="display:none;">
+            <label class="field-label">% Comisión tarjeta</label>
+            <input class="field-input" type="number" name="comision_pct" id="inp-comision-{{ id_reserva }}" min="0" max="10"
+                   step="0.1" value="3.5" placeholder="3.5"
+                   oninput="actualizarPreviewComision({{ id_reserva }})">
+          </div>
+
+          <div class="form-field" style="grid-column: span 2;">
+            <label class="field-label">Notas (opcional)</label>
+            <input class="field-input" type="text" name="notas" placeholder="Referencia, banco, etc.">
+          </div>
+
+        </div>
+        <div id="preview-comision-{{ id_reserva }}" style="display:none; font-size:0.82rem; background:rgba(52,152,219,0.10); border-left:3px solid #3498db; border-radius:6px; padding:8px 12px; margin-top:8px;">
+        </div>
+        <p style="font-size:0.78rem; color:var(--text2); margin-top:4px;">
+          El abono se aplica automáticamente a la parcialidad pendiente más antigua — no hace falta elegir cómo repartirlo.
+        </p>
+
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">
+            💾 Registrar cobro
+          </button>
+        </div>
+      </form>
+    </details>
+  </div>
+
+</div>
+
+<!-- Modal anular cobro -->
+<div id="modal-anular-{{ id_reserva }}" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:28px 32px; width:380px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <h3 style="margin:0 0 16px; color:var(--danger); font-size:1rem;">⚠️ Anular cobro</h3>
+    <form id="form-anular-{{ id_reserva }}"
+          method="post" action="#"
+          hx-post="/bitacora/{{ id_reserva }}/cobros/__ID__/anular"
+          hx-target="#seccion-cobros" hx-swap="outerHTML">
+      <div class="form-field" style="margin-bottom:14px;">
+        <label class="field-label">Motivo de anulación</label>
+        <input class="field-input" type="text" name="motivo" required placeholder="Ej: Error de captura, devolución...">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-primary" style="background:var(--danger); font-size:0.875rem;">
+          Confirmar anulación
+        </button>
+        <button type="button" class="btn btn-outline" style="font-size:0.875rem;"
+                onclick="document.getElementById('modal-anular-{{ id_reserva }}').style.display='none'">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+</div>
+
+<script>
+function toggleParcialidad(id, val) {
+  document.getElementById('wrap-parcialidad-' + id).style.display = (val === 'Parcialidad') ? '' : 'none';
+  if (val !== 'Parcialidad') {
+    const inpMonto = document.getElementById('inp-monto-' + id);
+    if (inpMonto) inpMonto.value = '';
+  }
+}
+function autoFillMontoParcialidad(id, sel) {
+  const monto = sel.options[sel.selectedIndex]?.getAttribute('data-monto');
+  const inp = document.getElementById('inp-monto-' + id);
+  if (inp && monto) inp.value = parseFloat(monto).toFixed(2);
+}
+function toggleComision(id, val) {
+  document.getElementById('wrap-comision-' + id).style.display = (val === 'Tarjeta de Crédito/Débito') ? '' : 'none';
+  actualizarPreviewComision(id);
+}
+function actualizarPreviewComision(id) {
+  const preview = document.getElementById('preview-comision-' + id);
+  const metodo = document.getElementById('sel-metodo-' + id)?.value;
+  const monto = parseFloat(document.getElementById('inp-monto-' + id)?.value || '0');
+  const pct = parseFloat(document.getElementById('inp-comision-' + id)?.value || '0');
+  if (metodo === 'Tarjeta de Crédito/Débito' && pct > 0 && monto > 0) {
+    const comision = monto * (pct / 100);
+    const neto = monto - comision;
+    preview.style.display = '';
+    preview.innerHTML = '💳 Monto neto: <b>$' + neto.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' {{ moneda }}</b>'
+      + ' &nbsp;|&nbsp; Comisión: $' + comision.toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' {{ moneda }}';
+  } else {
+    preview.style.display = 'none';
+  }
+}
+function abrirAnular(idMov) {
+  const rid = {{ id_reserva }};
+  const modal = document.getElementById('modal-anular-' + rid);
+  const form  = document.getElementById('form-anular-' + rid);
+  const url = `/bitacora/${rid}/cobros/${idMov}/anular`;
+  form.setAttribute('hx-post', url);
+  form.setAttribute('action', url);
+  htmx.process(form);
+  modal.style.display = 'flex';
+}
+</script>

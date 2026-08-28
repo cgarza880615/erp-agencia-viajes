@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="{% if cliente and cliente.id_cliente %}/clientes/{{ cliente.id_cliente }}{% else %}/clientes{% endif %}"
+     class="btn btn-outline" style="font-size:0.8rem;">← Atrás</a>
+  <h1 class="page-title" style="margin:0;">{{ titulo }}</h1>
+</div>
+
+<!-- Aviso duplicados -->
+{% if aviso_dup %}
+<div class="alerta-inline alerta-warning" style="margin-bottom:20px;">
+  <strong>⚠️ Posibles duplicados encontrados:</strong>
+  <ul style="margin:8px 0 12px 20px; font-size:0.875rem;">
+    {% for a in aviso_dup %}
+    <li>{{ a | safe }}</li>
+    {% endfor %}
+  </ul>
+  <p style="font-size:0.85rem; margin:0 0 12px;">Si es un cliente diferente, confirma para guardarlo de todos modos.</p>
+  <form method="post" action="{{ accion }}" style="display:inline;">
+    {% if cliente %}
+      <input type="hidden" name="nombre"           value="{{ cliente.nombre or '' }}">
+      <input type="hidden" name="telefono"         value="{{ cliente.telefono or '' }}">
+      <input type="hidden" name="email"            value="{{ cliente.email or '' }}">
+      <input type="hidden" name="fecha_nacimiento" value="{{ cliente.fecha_nacimiento or '' }}">
+      <input type="hidden" name="codigo_pais"      value="{{ cliente.codigo_pais or '+52' }}">
+    {% endif %}
+    <input type="hidden" name="forzar" value="1">
+    <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">
+      ✅ Es un cliente diferente — Guardar de todos modos
+    </button>
+  </form>
+</div>
+{% endif %}
+
+<!-- Error -->
+{% if error %}
+<div class="alerta-inline alerta-critica" style="margin-bottom:20px;">⚠️ {{ error }}</div>
+{% endif %}
+
+<form method="post" action="{{ accion }}">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">👤 Datos del cliente</div>
+  <div class="card-body">
+
+    {% if next_id %}
+    <div style="margin-bottom:16px; padding:10px 14px; background:var(--bg); border-radius:8px;
+                border:1px solid var(--border); display:inline-flex; align-items:center; gap:10px;">
+      <span style="font-size:0.8rem; color:var(--text2);">ID asignado automáticamente:</span>
+      <strong style="font-family:monospace; color:var(--primary); font-size:1rem;">{{ next_id }}</strong>
+    </div>
+    {% endif %}
+
+    <div class="form-grid">
+
+      <div class="form-field" style="grid-column:span 2;">
+        <label class="field-label">Nombre completo *</label>
+        <input class="field-input" type="text" name="nombre" required autofocus
+               value="{{ cliente.nombre if cliente else '' }}"
+               placeholder="Nombre y apellidos">
+      </div>
+
+      <div class="form-field">
+        <label class="field-label">Código de país</label>
+        <select name="codigo_pais" class="field-select">
+          <option value="+52" {% if not cliente or (cliente.codigo_pais or '+52') == '+52' %}selected{% endif %}>+52 México</option>
+          <option value="+1"  {% if cliente and cliente.codigo_pais == '+1' %}selected{% endif %}>+1 EE.UU./Canadá</option>
+          <option value="+57" {% if cliente and cliente.codigo_pais == '+57' %}selected{% endif %}>+57 Colombia</option>
+          <option value="+34" {% if cliente and cliente.codigo_pais == '+34' %}selected{% endif %}>+34 España</option>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label class="field-label">Teléfono (10 dígitos)</label>
+        <input class="field-input" type="tel" name="telefono"
+               value="{{ cliente.telefono if cliente else '' }}"
+               placeholder="818-123-4567"
+               pattern="[\d\-\s\(\)\+]{10,15}"
+               title="10 dígitos, puedes usar guiones">
+      </div>
+
+      <div class="form-field" style="grid-column:span 2;">
+        <label class="field-label">Correo electrónico</label>
+        <input class="field-input" type="email" name="email"
+               value="{{ cliente.email if cliente else '' }}"
+               placeholder="correo@ejemplo.com">
+      </div>
+
+      <div class="form-field">
+        <label class="field-label">Fecha de nacimiento</label>
+        <input class="field-input" type="date" name="fecha_nacimiento"
+               value="{{ cliente.fecha_nacimiento if cliente else '' }}"
+               min="1920-01-01" max="2015-12-31">
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="display:flex; gap:12px; margin-bottom:40px;">
+  <button type="submit" class="btn btn-primary">
+    💾 {{ 'Registrar Cliente' if not cliente or not cliente.id_cliente else 'Guardar Cambios' }}
+  </button>
+  <a href="{% if cliente and cliente.id_cliente %}/clientes/{{ cliente.id_cliente }}{% else %}/clientes{% endif %}"
+     class="btn btn-outline">Cancelar</a>
+</div>
+
+</form>
+{% endblock %}

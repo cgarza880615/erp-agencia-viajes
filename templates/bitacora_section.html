@@ -1,0 +1,46 @@
+<div id="seccion-bitacora">
+<div class="card" style="margin-bottom:32px;">
+  <div class="card-header">📝 Bitácora de cambios</div>
+
+  <!-- Formulario nota manual -->
+  <div style="padding:12px 20px; border-bottom:1px solid var(--border);">
+    <form method="post" action="/bitacora/{{ id_reserva }}/nota"
+          hx-post="/bitacora/{{ id_reserva }}/nota"
+          hx-target="#seccion-bitacora" hx-swap="outerHTML"
+          style="display:flex; gap:10px; align-items:center;">
+      <input class="field-input" type="text" name="texto" placeholder="Agregar nota manual..."
+             style="flex:1;" required>
+      <button type="submit" class="btn btn-outline" style="font-size:0.8rem; white-space:nowrap;">+ Nota</button>
+    </form>
+  </div>
+
+  <!-- Historial -->
+  {% if bitacora %}
+  <table>
+    <thead>
+      <tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Detalle</th></tr>
+    </thead>
+    <tbody>
+      {% for b in bitacora %}
+      <tr>
+        <td style="white-space:nowrap; font-size:0.8rem;">{{ b.fecha }}</td>
+        <td style="font-size:0.85rem;">{{ b.usuario }}</td>
+        <td>
+          <strong style="font-size:0.8rem;
+            {% if b.accion in ('CANCELADO','INCOBRABLE','ANULACIÓN','VOID') %}color:var(--danger);
+            {% elif b.accion in ('CREACIÓN','TERMINADO') %}color:var(--primary);
+            {% elif b.accion == 'NOTA' %}color:var(--info);
+            {% endif %}">
+            {{ b.accion }}
+          </strong>
+        </td>
+        <td style="color:var(--text2); font-size:0.83rem;">{{ b.detalle or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:20px; color:var(--text2); font-size:0.875rem;">Sin registros aún.</div>
+  {% endif %}
+</div>
+</div>

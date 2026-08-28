@@ -1,0 +1,49 @@
+<div class="crumb"><a href="index.html">Manual</a> / Cotizaciones</div>
+<div class="eyebrow">Módulo 4</div>
+<h1>📄 Cotizaciones</h1>
+<p class="lede">Una propuesta de viaje que le mandas al cliente antes de que decida comprar. Si acepta, se convierte en itinerario real con un clic — sin volver a capturar nada.</p>
+
+<h2>Estados de una cotización</h2>
+<table class="field-ref">
+  <tr><th>Estado</th><th>Qué significa</th></tr>
+  <tr><td><span class="chip warn">PENDIENTE</span></td><td>Recién creada, no se le ha mandado al cliente.</td></tr>
+  <tr><td><span class="chip warn">ENVIADA</span></td><td>Ya se le mandó el PDF al cliente.</td></tr>
+  <tr><td><span class="chip ok">ACEPTADA</span></td><td>El cliente dijo que sí — normalmente ya se convirtió en itinerario.</td></tr>
+  <tr><td><span class="chip danger">EXPIRADA</span></td><td>Pasó la fecha de vigencia sin respuesta — el sistema la marca sola, no hay que hacer nada manualmente.</td></tr>
+</table>
+
+<div class="callout warning">
+  <strong>Importante</strong>
+  Si editas una cotización que ya estaba en <strong>ENVIADA</strong>, el sistema la regresa automáticamente a <strong>PENDIENTE</strong> — es un recordatorio de que hay que volver a mandársela al cliente, porque los datos que vio ya no son los mismos.
+</div>
+
+<h2>Crear una cotización nueva</h2>
+<ol class="steps">
+  <li><div class="step-body"><strong>Selecciona el cliente y escribe el destino.</strong> El campo Destino sugiere lugares ya usados antes (para evitar "Cancun"/"cancún"/"Cancún" como cosas distintas).</div></li>
+  <li><div class="step-body"><strong>Captura fechas de salida/regreso</strong> y, si quieres, fecha límite de pago del cliente y del proveedor.</div></li>
+  <li><div class="step-body"><strong>Llena Servicios y precios</strong>: vuelo, TUA, hotel, traslados, tours, adicionales — precio al cliente y costo interno de cada uno.</div></li>
+  <li><div class="step-body"><strong>(Opcional) Agrega Opción 2 y 3 de hotel</strong> — el PDF final mostrará un comparativo de precio total por cada opción, para que el cliente elija.</div></li>
+  <li><div class="step-body"><strong>Guarda</strong> — el folio se genera solo (ej. <code class="k">COT-2026-0001</code>).</div></li>
+</ol>
+
+<div class="callout tip">
+  <strong>Tip</strong>
+  Si marcas que la cotización incluye vuelo, el sistema te va a pedir fecha y hora de ida y vuelta antes de dejarte guardar — evita mandar cotizaciones de vuelo incompletas.
+</div>
+
+<h2>Convertir a itinerario</h2>
+<p>Desde el detalle de la cotización, el botón "Convertir a Itinerario" copia automáticamente todos los datos financieros y crea la reserva real, con su plan de pagos ya armado (anticipo + parcialidades) y el pasajero titular ya agregado. Si la cotización tenía varias opciones de hotel, eliges cuál fue la que aceptó el cliente antes de convertir.</p>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>¿Puedo convertir una cotización EXPIRADA?</summary>
+  <p class="faq-body">Sí, expirar solo es una etiqueta informativa — no bloquea la conversión. Si el cliente sigue interesado después de la fecha de vigencia, puedes convertirla igual (o editarla primero si algo cambió de precio).</p>
+</details>
+<details class="faq">
+  <summary>Ya convertí la cotización pero el cliente pidió un cambio, ¿edito la cotización o el itinerario?</summary>
+  <p class="faq-body">Una vez convertida, la cotización queda como historial — los cambios se hacen directo en el itinerario ya creado (ver <a href="05-itinerarios-crear-editar.html">Itinerarios — Crear y Editar</a>).</p>
+</details>
+<details class="faq">
+  <summary>¿Por qué no me deja guardar la cotización?</summary>
+  <p class="faq-body">Revisa que la fecha de regreso sea posterior a la de salida, que las fechas límite tengan sentido, y que si marcaste "incluye vuelo" hayas capturado fecha y hora de ida y vuelta — el sistema valida todo eso antes de guardar.</p>
+</details>

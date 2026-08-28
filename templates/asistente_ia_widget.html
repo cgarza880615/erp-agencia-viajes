@@ -1,0 +1,113 @@
+<div id="asistente_ia-bubble" onclick="toggleAsistente_IA()" title="Asistente IA">
+  <img src="/static/asistente_avatar.png" alt="Asistente IA" onerror="this.style.display='none'; this.parentElement.textContent='🧳';">
+</div>
+
+<div id="asistente_ia-panel">
+  <div class="asistente_ia-panel-header">
+    <span>🧳 Asistente IA</span>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button type="button" class="asistente_ia-btn-icon"
+              hx-post="/asistente_ia/nueva-conversacion" hx-target="#asistente_ia-messages" hx-swap="innerHTML"
+              title="Nueva conversación (la anterior no se borra, solo deja de mostrarse)">🆕</button>
+      <button type="button" class="asistente_ia-btn-icon" onclick="toggleAsistente_IA(false)" title="Cerrar">✕</button>
+    </div>
+  </div>
+
+  <div id="asistente_ia-uso"></div>
+
+  <div id="asistente_ia-messages"
+       hx-get="/asistente_ia/mensajes" hx-trigger="load, every 8s" hx-swap="innerHTML">
+  </div>
+
+  <div id="asistente_ia-typing">
+    <div class="asistente_ia-msg assistant"><div class="asistente_ia-bubble">Asistente IA está escribiendo…</div></div>
+  </div>
+
+  <form id="asistente_ia-form"
+        hx-post="/asistente_ia/enviar" hx-target="#asistente_ia-messages" hx-swap="innerHTML"
+        hx-include="this" hx-indicator="#asistente_ia-typing" hx-on::before-request="this.reset()">
+    <input type="text" name="mensaje" placeholder="Escríbele a Asistente IA..." autocomplete="off" required maxlength="2000">
+    <button type="submit">➤</button>
+  </form>
+</div>
+
+<style>
+  #asistente_ia-bubble {
+    position: fixed; bottom: 20px; right: 20px; z-index: 999;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--primary, #2563eb); box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; overflow: hidden; font-size: 1.6rem;
+  }
+  #asistente_ia-bubble img { width: 100%; height: 100%; object-fit: cover; }
+
+  #asistente_ia-panel {
+    position: fixed; bottom: 88px; right: 20px; z-index: 999;
+    width: 360px; max-width: calc(100vw - 32px); height: 500px; max-height: calc(100vh - 120px);
+    background: var(--bg, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+    display: none; flex-direction: column; overflow: hidden;
+  }
+  body.asistente_ia-abierto #asistente_ia-panel { display: flex; }
+
+  .asistente_ia-panel-header {
+    padding: 10px 14px; background: var(--primary, #2563eb); color: #fff;
+    display: flex; justify-content: space-between; align-items: center; font-weight: 600;
+  }
+  .asistente_ia-btn-icon { background: none; border: none; color: #fff; cursor: pointer; font-size: 1rem; }
+
+  #asistente_ia-uso {
+    padding: 4px 12px; font-size: 0.7rem; color: var(--text2, #64748b);
+    border-bottom: 1px solid var(--border, #e5e7eb); text-align: right;
+  }
+  #asistente_ia-messages { flex: 1; overflow-y: auto; padding: 12px; }
+  #asistente_ia-typing { display: none; padding: 0 12px 8px; opacity: 0.7; }
+  #asistente_ia-typing.htmx-request { display: block; }
+  .asistente_ia-msg { display: flex; margin-bottom: 8px; }
+  .asistente_ia-msg.user { justify-content: flex-end; }
+  .asistente_ia-bubble {
+    max-width: 82%; padding: 8px 12px; border-radius: 12px; font-size: 0.85rem; white-space: pre-wrap;
+  }
+  .asistente_ia-msg.user .asistente_ia-bubble { background: var(--primary, #2563eb); color: #fff; }
+  .asistente_ia-msg.assistant .asistente_ia-bubble { background: var(--bg2, #f1f5f9); color: var(--text, #111); }
+
+  .asistente_ia-propuesta-card {
+    margin: 8px 0; padding: 10px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px;
+    background: var(--bg2, #f8fafc);
+  }
+  .asistente_ia-propuesta-titulo { font-weight: 600; margin-bottom: 6px; font-size: 0.85rem; }
+  .asistente_ia-propuesta-resumen { font-size: 0.78rem; white-space: pre-wrap; margin: 0 0 8px; }
+  .asistente_ia-confirmacion-banner {
+    background: rgba(39,174,96,0.12); border: 1px solid rgba(39,174,96,0.3); color: #166534;
+    padding: 8px 10px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 8px;
+  }
+
+  #asistente_ia-form { display: flex; gap: 6px; padding: 10px; border-top: 1px solid var(--border, #e5e7eb); }
+  #asistente_ia-form input { flex: 1; padding: 8px 10px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; font-size: 0.85rem; }
+  #asistente_ia-form button { background: var(--primary, #2563eb); color: #fff; border: none; border-radius: 8px; padding: 0 14px; cursor: pointer; }
+</style>
+
+<script>
+  function toggleAsistente_IA(forceOpen) {
+    var abrir = (typeof forceOpen === 'boolean') ? forceOpen : !document.body.classList.contains('asistente_ia-abierto');
+    document.body.classList.toggle('asistente_ia-abierto', abrir);
+    localStorage.setItem('asistente_ia_abierto', abrir ? '1' : '0');
+  }
+  if (localStorage.getItem('asistente_ia_abierto') === '1') {
+    document.body.classList.add('asistente_ia-abierto');
+  }
+
+  function asistente_iaActualizarUso() {
+    var el = document.getElementById('asistente_ia-uso');
+    if (!el) return;
+    fetch('/asistente_ia/uso')
+      .then(function(r){ return r.json(); })
+      .then(function(u){
+        if (!u || u.rpm_limite === undefined) return;
+        el.textContent = u.tpm_usado + '/' + u.tpm_limite + ' tokens/min · ' + u.rpd_usado + '/' + u.rpd_limite + ' msj hoy';
+      })
+      .catch(function(){});
+  }
+  asistente_iaActualizarUso();
+  setInterval(asistente_iaActualizarUso, 10000);
+</script>

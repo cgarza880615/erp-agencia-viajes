@@ -1,0 +1,169 @@
+<div id="seccion-logistica-grupo">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🏢 Logística del Grupo (hoteles, vuelos, proveedores)</div>
+  <div class="card-body" style="padding-bottom:0;">
+    <p style="color:var(--text2); font-size:0.8rem; margin:0 0 12px;">
+      Editable en cualquier momento. Puedes tener varias entradas del mismo tipo (ej. 2 hoteles, 2 vuelos con fechas distintas).
+    </p>
+
+    {% if lineas %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr><th>Tipo</th><th>Nombre / Proveedor</th><th>Confirmación</th><th>Fecha / Hora</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for l in lineas %}
+        <tr>
+          <td>{{ l.tipo }}</td>
+          <td>{{ l.nombre or '—' }}</td>
+          <td>{{ l.confirmacion or '—' }}</td>
+          <td>
+            {% if l.fecha_salida %}
+              {{ l.fecha_salida }} {{ l.hora_ida or '' }}{% if l.fecha_regreso %} → {{ l.fecha_regreso }} {{ l.hora_vuelta or '' }}{% endif %}
+            {% else %}—{% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <button type="button" style="background:transparent; border:1px solid var(--border); border-radius:6px; padding:2px 8px; cursor:pointer;" onclick="abrirEditarLogistica({{ l.id_logistica }}, '{{ l.tipo }}', '{{ (l.nombre or '') | replace("'", "\\'") }}', '{{ (l.confirmacion or '') | replace("'", "\\'") }}', '{{ (l.detalle or '') | replace("'", "\\'") }}', '{{ l.fecha_salida or '' }}', '{{ l.fecha_regreso or '' }}', '{{ l.hora_ida or '' }}', '{{ l.hora_vuelta or '' }}')">✏️</button>
+            {% if reservas and l.tipo in ['Mayorista','Aerolínea/Vuelo','Hotel','Traslado','Tours'] %}
+            <details style="display:inline-block;">
+              <summary style="cursor:pointer; display:inline; font-size:0.85rem;">📤</summary>
+              <form method="post" action="/grupos/{{ id_grupo }}/logistica/{{ l.id_logistica }}/aplicar"
+                    hx-post="/grupos/{{ id_grupo }}/logistica/{{ l.id_logistica }}/aplicar"
+                    hx-target="#seccion-logistica-grupo" hx-swap="outerHTML"
+                    style="position:absolute; background:white; border:1px solid var(--border); border-radius:8px; padding:12px; box-shadow:0 8px 24px rgba(0,0,0,0.15); z-index:50; width:260px;">
+                <p style="font-size:0.78rem; color:var(--text2); margin:0 0 8px;">Aplicar a itinerarios (destilda los que quieras excluir):</p>
+                {% for r in reservas %}
+                <label style="display:block; font-size:0.8rem; margin-bottom:4px;">
+                  <input type="checkbox" name="id_reserva" value="{{ r.id_reserva }}" checked> Itin #{{ r.id_reserva }} — {{ r.nombre }}
+                </label>
+                {% endfor %}
+                <button type="submit" class="btn btn-primary" style="font-size:0.78rem; margin-top:8px;">Aplicar</button>
+              </form>
+            </details>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin logística registrada todavía.</p>
+    {% endif %}
+
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
+        + Agregar logística
+      </summary>
+      <form method="post" action="/grupos/{{ id_grupo }}/logistica/agregar"
+            hx-post="/grupos/{{ id_grupo }}/logistica/agregar"
+            hx-target="#seccion-logistica-grupo" hx-swap="outerHTML" style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Tipo</label>
+            <select class="field-select" name="tipo" id="nlg-tipo" onchange="nlgTipoCambio(this.value)">
+              {% for t in tipos %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Nombre / Proveedor</label>
+            <input class="field-input" type="text" name="nombre">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Confirmación / Localizador</label>
+            <input class="field-input" type="text" name="confirmacion">
+          </div>
+        </div>
+        <div class="form-grid" id="nlg-fechas" style="display:none; margin-top:8px;">
+          <div class="form-field"><label class="field-label" id="nlg-lbl-f1">Fecha</label><input class="field-input" type="date" name="fecha_salida"></div>
+          <div class="form-field" id="nlg-wrap-f2"><label class="field-label" id="nlg-lbl-f2">Fecha 2</label><input class="field-input" type="date" name="fecha_regreso"></div>
+          <div class="form-field"><label class="field-label" id="nlg-lbl-h1">Hora</label><input class="field-input" type="text" name="hora_ida" placeholder="Ej: 14:35"></div>
+          <div class="form-field" id="nlg-wrap-h2"><label class="field-label" id="nlg-lbl-h2">Hora 2</label><input class="field-input" type="text" name="hora_vuelta" placeholder="Ej: 21:15"></div>
+        </div>
+        <div class="form-field" style="margin-top:8px;">
+          <label class="field-label">Detalle (opcional)</label>
+          <input class="field-input" type="text" name="detalle">
+        </div>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Agregar</button>
+        </div>
+      </form>
+    </details>
+  </div>
+</div>
+</div>
+
+<!-- Modal editar logística -->
+<div id="modal-logistica" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:28px 32px; width:440px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <h3 id="lg-titulo" style="margin:0 0 16px; font-size:1rem;">✏️ Editar logística</h3>
+    <form id="form-editar-logistica" method="post" action="#" hx-target="#seccion-logistica-grupo" hx-swap="outerHTML">
+      <div class="form-field">
+        <label class="field-label">Nombre / Proveedor</label>
+        <input class="field-input" type="text" name="nombre" id="lg-nombre">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Confirmación / Localizador</label>
+        <input class="field-input" type="text" name="confirmacion" id="lg-confirmacion">
+      </div>
+      <div class="form-grid" id="lg-fechas" style="display:none;">
+        <div class="form-field"><label class="field-label" id="lg-lbl-f1">Fecha</label><input class="field-input" type="date" name="fecha_salida" id="lg-fecha-salida"></div>
+        <div class="form-field" id="lg-wrap-f2"><label class="field-label" id="lg-lbl-f2">Fecha 2</label><input class="field-input" type="date" name="fecha_regreso" id="lg-fecha-regreso"></div>
+        <div class="form-field"><label class="field-label" id="lg-lbl-h1">Hora</label><input class="field-input" type="text" name="hora_ida" id="lg-hora-ida"></div>
+        <div class="form-field" id="lg-wrap-h2"><label class="field-label" id="lg-lbl-h2">Hora 2</label><input class="field-input" type="text" name="hora_vuelta" id="lg-hora-vuelta"></div>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Detalle</label>
+        <input class="field-input" type="text" name="detalle" id="lg-detalle">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Guardar</button>
+        <button type="button" class="btn btn-outline" style="font-size:0.875rem;" onclick="document.getElementById('modal-logistica').style.display='none'">Cancelar</button>
+      </div>
+      <button type="button" id="btn-eliminar-logistica" class="btn-icon-danger" style="margin-top:10px; font-size:0.8rem;" onclick="eliminarLogistica()">🗑️ Eliminar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+let _idGrupoLogistica = {{ id_grupo }};
+const _lgDateCfg = {{ date_cfg | tojson }};
+
+function _aplicarDateCfg(tipo, prefix) {
+  const cfg = _lgDateCfg[tipo];
+  const wrap = document.getElementById(prefix + '-fechas');
+  if (!cfg) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  document.getElementById(prefix + '-lbl-f1').textContent = cfg.f1;
+  document.getElementById(prefix + '-lbl-h1').textContent = cfg.h1;
+  document.getElementById(prefix + '-wrap-f2').style.display = cfg.f2 ? '' : 'none';
+  document.getElementById(prefix + '-wrap-h2').style.display = cfg.h2 ? '' : 'none';
+  if (cfg.f2) document.getElementById(prefix + '-lbl-f2').textContent = cfg.f2;
+  if (cfg.h2) document.getElementById(prefix + '-lbl-h2').textContent = cfg.h2;
+}
+function nlgTipoCambio(tipo) { _aplicarDateCfg(tipo, 'nlg'); }
+
+function abrirEditarLogistica(idLogistica, tipo, nombre, confirmacion, detalle, fsal, freg, hida, hvta) {
+  document.getElementById('lg-titulo').textContent = '✏️ Editar: ' + tipo;
+  document.getElementById('lg-nombre').value = nombre;
+  document.getElementById('lg-confirmacion').value = confirmacion;
+  document.getElementById('lg-detalle').value = detalle;
+  document.getElementById('lg-fecha-salida').value = fsal;
+  document.getElementById('lg-fecha-regreso').value = freg;
+  document.getElementById('lg-hora-ida').value = hida;
+  document.getElementById('lg-hora-vuelta').value = hvta;
+  _aplicarDateCfg(tipo, 'lg');
+  const form = document.getElementById('form-editar-logistica');
+  const url = `/grupos/${_idGrupoLogistica}/logistica/${idLogistica}/editar`;
+  form.setAttribute('hx-post', url);
+  form.setAttribute('action', url);
+  form.dataset.idLogistica = idLogistica;
+  htmx.process(form);
+  document.getElementById('modal-logistica').style.display = 'flex';
+}
+function eliminarLogistica() {
+  const idLogistica = document.getElementById('form-editar-logistica').dataset.idLogistica;
+  const url = `/grupos/${_idGrupoLogistica}/logistica/${idLogistica}/eliminar`;
+  htmx.ajax('POST', url, {target: '#seccion-logistica-grupo', swap: 'outerHTML'});
+  document.getElementById('modal-logistica').style.display = 'none';
+}
+</script>

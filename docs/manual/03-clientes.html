@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clientes — Manual ERP Agencia de Viajes</title>
+<meta name="description" content="Manual práctico del sistema — ERP Agencia de Viajes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --bg: #F4F6F7;
+  --surface: #FFFFFF;
+  --border: #DCE3E6;
+  --ink: #10202A;
+  --ink-soft: #52636D;
+  --teal: #0E7C7B;
+  --teal-deep: #0B5F5E;
+  --teal-wash: #E4F2F1;
+  --amber: #C97A2B;
+  --amber-wash: #FBF0E4;
+  --brick: #B3432B;
+  --brick-wash: #FBEAE5;
+  --moss: #3F8F5F;
+  --moss-wash: #E9F5EE;
+  --shadow: 0 1px 2px rgba(16,32,42,0.06), 0 4px 16px rgba(16,32,42,0.05);
+  --radius: 10px;
+  --sidebar-w: 264px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1417;
+    --surface: #141C20;
+    --border: #253135;
+    --ink: #E8EEEF;
+    --ink-soft: #9BABB1;
+    --teal: #45BDB9;
+    --teal-deep: #6ED4D0;
+    --teal-wash: #17302E;
+    --amber: #E0A159;
+    --amber-wash: #2E2417;
+    --brick: #E38A76;
+    --brick-wash: #2E1B17;
+    --moss: #74C99A;
+    --moss-wash: #14261C;
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1417;
+  --surface: #141C20;
+  --border: #253135;
+  --ink: #E8EEEF;
+  --ink-soft: #9BABB1;
+  --teal: #45BDB9;
+  --teal-deep: #6ED4D0;
+  --teal-wash: #17302E;
+  --amber: #E0A159;
+  --amber-wash: #2E2417;
+  --brick: #E38A76;
+  --brick-wash: #2E1B17;
+  --moss: #74C99A;
+  --moss-wash: #14261C;
+  --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.35);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  display: flex;
+  min-height: 100vh;
+}
+h1, h2, h3 { font-family: "Fraunces", Georgia, serif; text-wrap: balance; color: var(--ink); }
+h1 { font-size: 2rem; font-weight: 600; margin: 0 0 6px; }
+h2 { font-size: 1.4rem; font-weight: 600; margin: 40px 0 14px; padding-top: 8px; border-top: 1px solid var(--border); }
+h2:first-of-type { border-top: none; padding-top: 0; margin-top: 8px; }
+h3 { font-size: 1.1rem; font-weight: 600; margin: 26px 0 10px; }
+p { margin: 0 0 14px; color: var(--ink); }
+a { color: var(--teal); }
+.eyebrow {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--teal);
+  font-weight: 600;
+}
+.lede { color: var(--ink-soft); font-size: 1.05rem; max-width: 62ch; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 24px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 20px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.brand-mark {
+  width: 36px; height: 36px; border-radius: 8px;
+  background: var(--teal);
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.brand-text { font-family: "Fraunces", serif; font-weight: 600; font-size: 0.95rem; line-height: 1.2; }
+.brand-text span { display: block; font-family: "IBM Plex Sans", sans-serif; font-weight: 400; font-size: 0.72rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+nav.toc { display: flex; flex-direction: column; gap: 2px; }
+nav.toc a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.88rem;
+  transition: background 0.12s;
+}
+nav.toc a:hover { background: var(--teal-wash); color: var(--teal-deep); }
+nav.toc a.active { background: var(--teal-wash); color: var(--teal-deep); font-weight: 600; }
+nav.toc a .ico { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
+
+/* ── Main content ── */
+main {
+  flex: 1;
+  min-width: 0;
+  max-width: 920px;
+  padding: 48px 56px 96px;
+}
+.crumb { font-size: 0.82rem; color: var(--ink-soft); margin-bottom: 18px; }
+.crumb a { color: var(--ink-soft); text-decoration: none; }
+.crumb a:hover { color: var(--teal); }
+
+/* ── Screenshots ── */
+figure.shot-frame {
+  margin: 20px 0 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  background: var(--surface);
+}
+.shot-chrome {
+  display: flex; gap: 6px; align-items: center;
+  padding: 9px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.shot-chrome span { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+figure.shot-frame img { display: block; width: 100%; height: auto; }
+figcaption {
+  padding: 10px 16px;
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--border);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+/* ── Steps ── */
+ol.steps { list-style: none; margin: 0 0 24px; padding: 0; counter-reset: step; }
+ol.steps > li {
+  counter-increment: step;
+  display: flex; gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+ol.steps > li:last-child { border-bottom: none; }
+ol.steps > li::before {
+  content: counter(step);
+  flex-shrink: 0;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--teal);
+  color: white;
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 600;
+  font-size: 0.85rem;
+  display: flex; align-items: center; justify-content: center;
+}
+ol.steps > li .step-body strong { display: block; margin-bottom: 2px; }
+ol.steps > li .step-body { padding-top: 3px; }
+
+/* ── Callouts ── */
+.callout {
+  border-left: 4px solid var(--amber);
+  background: var(--amber-wash);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin: 18px 0;
+  font-size: 0.92rem;
+}
+.callout.warning { border-color: var(--brick); background: var(--brick-wash); }
+.callout.tip { border-color: var(--amber); background: var(--amber-wash); }
+.callout.note { border-color: var(--teal); background: var(--teal-wash); }
+.callout strong { display: block; margin-bottom: 3px; font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* ── Field/table reference ── */
+table.field-ref { width: 100%; border-collapse: collapse; margin: 10px 0 24px; font-size: 0.9rem; }
+table.field-ref th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); padding: 8px 10px; border-bottom: 1px solid var(--border); }
+table.field-ref td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+table.field-ref code { font-family: "IBM Plex Mono", monospace; font-size: 0.82rem; background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+/* ── Badge chip (mirrors app badges) ── */
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 20px; font-size: 0.76rem; font-weight: 600; }
+.chip.ok { background: var(--moss-wash); color: var(--moss); }
+.chip.warn { background: var(--amber-wash); color: var(--amber); }
+.chip.danger { background: var(--brick-wash); color: var(--brick); }
+
+/* ── Module grid on index ── */
+.module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin: 24px 0; }
+.module-card {
+  display: block; text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  background: var(--surface);
+  transition: border-color 0.12s, transform 0.12s;
+}
+.module-card:hover { border-color: var(--teal); transform: translateY(-1px); }
+.module-card .ico { font-size: 1.6rem; }
+.module-card h3 { margin: 10px 0 4px; font-size: 1.02rem; }
+.module-card p { margin: 0; font-size: 0.85rem; color: var(--ink-soft); }
+
+code.k { font-family: "IBM Plex Mono", monospace; background: var(--bg); border: 1px solid var(--border); padding: 1px 6px; border-radius: 5px; font-size: 0.85em; }
+
+/* ── FAQ (acordeón nativo) ── */
+details.faq {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--surface);
+}
+details.faq summary {
+  padding: 13px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+details.faq summary::-webkit-details-marker { display: none; }
+details.faq summary::before {
+  content: '▸';
+  color: var(--teal);
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+details.faq[open] summary::before { transform: rotate(90deg); }
+details.faq .faq-body { padding: 0 16px 16px 42px; margin: 0; color: var(--ink-soft); }
+
+/* ── Buscador de la barra lateral ── */
+.search-box { position: relative; margin-bottom: 16px; }
+.search-box input {
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 0.85rem;
+}
+.search-box input:focus { outline: 2px solid var(--teal); outline-offset: 1px; }
+.search-box input::placeholder { color: var(--ink-soft); }
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  z-index: 20;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.search-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  text-decoration: none;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border);
+}
+.search-result:last-child { border-bottom: none; }
+.search-result:hover { background: var(--teal-wash); }
+.search-result .ico { font-size: 1rem; flex-shrink: 0; margin-top: 1px; }
+.search-result strong { display: block; font-size: 0.83rem; }
+.search-result small { display: block; font-size: 0.76rem; color: var(--ink-soft); margin-top: 2px; line-height: 1.4; }
+.search-empty { padding: 14px 12px; font-size: 0.83rem; color: var(--ink-soft); }
+
+@media (max-width: 860px) {
+  body { flex-direction: column; }
+  .sidebar { position: relative; height: auto; width: 100%; }
+  main { padding: 28px 20px 60px; max-width: 100%; }
+}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">✈️</div>
+    <div class="brand-text">ERP Agencia de Viajes<span>Manual</span></div>
+  </div>
+  <div class="search-box">
+    <input type="search" id="manual-search" placeholder="🔍 Buscar en el manual…" autocomplete="off">
+    <div id="search-results" class="search-results" hidden></div>
+  </div>
+  <nav class="toc">
+      <a href="index.html"><span class="ico">🏠</span>Inicio</a>
+      <a href="01-torre-control.html"><span class="ico">🚨</span>Torre de Control</a>
+      <a href="02-alertas.html"><span class="ico">🔔</span>Alertas</a>
+      <a href="03-clientes.html" class="active"><span class="ico">👥</span>Clientes</a>
+      <a href="04-cotizaciones.html"><span class="ico">📄</span>Cotizaciones</a>
+      <a href="05-itinerarios-crear-editar.html"><span class="ico">🗂️</span>Itinerarios — Crear y Editar</a>
+      <a href="06-itinerarios-cobros-pagos.html"><span class="ico">💰</span>Itinerarios — Cobros y Pagos</a>
+      <a href="07-itinerarios-extras-gestion.html"><span class="ico">🛠️</span>Itinerarios — Extras y Gestión</a>
+      <a href="08-grupos-viaje.html"><span class="ico">🧳</span>Grupos de Viaje</a>
+      <a href="09-calendario.html"><span class="ico">📅</span>Calendario</a>
+      <a href="10-ingresos-egresos-libro.html"><span class="ico">📒</span>Ingresos, Egresos y Libro Diario</a>
+      <a href="11-buscar-auditoria.html"><span class="ico">🔍</span>Buscar y Auditoría</a>
+      <a href="12-admin.html"><span class="ico">⚙️</span>Admin</a>
+  </nav>
+</aside>
+<main id="main-content">
+<div class="crumb"><a href="index.html">Manual</a> / Clientes</div>
+<div class="eyebrow">Módulo 3</div>
+<h1>👥 Clientes</h1>
+<p class="lede">La base de datos de todas las personas que han viajado o cotizado con la agencia.</p>
+
+<h2>Registrar un cliente nuevo</h2>
+<ol class="steps">
+  <li><div class="step-body"><strong>Da clic en "+ Nuevo Cliente"</strong>arriba a la derecha.</div></li>
+  <li><div class="step-body"><strong>Llena nombre completo</strong> (único campo obligatorio) — el ID se asigna solo (ej. <code class="k">AC-139</code>).</div></li>
+  <li><div class="step-body"><strong>Teléfono y correo son opcionales</strong>, pero captúralos si los tienes — se usan para enviar recibos y para detectar si el cliente ya existe.</div></li>
+  <li><div class="step-body"><strong>Guarda con "Registrar Cliente".</strong></div></li>
+</ol>
+
+<div class="callout tip">
+  <strong>Tip</strong>
+  Si el teléfono, correo o nombre ya se parecen mucho a los de un cliente existente, el sistema te avisa antes de guardar, para no crear un cliente duplicado.
+</div>
+
+<h2>Detalle del cliente</h2>
+<p>Al entrar a un cliente ves su historial completo: cuántos viajes ha hecho, cuántos tiene activos, su gasto histórico, y si está "Al corriente" o tiene deuda activa.</p>
+
+<h3>Viajeros frecuentes</h3>
+<p>Son las personas que suelen viajar junto con este cliente (hijos, pareja, etc.). Una vez agregados aquí, aparecen como sugerencia con un clic al crear un nuevo itinerario para ese cliente — no hay que volver a escribir sus datos cada vez.</p>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>El sistema me avisó de un posible duplicado, ¿qué hago?</summary>
+  <p class="faq-body">Revisa el nombre/teléfono/correo que te muestra como coincidencia. Si es la misma persona, mejor usa su ficha existente en vez de crear una nueva (así no se le parte el historial de viajes). Si de verdad es alguien distinto que solo comparte datos parecidos, puedes forzar el guardado.</p>
+</details>
+<details class="faq">
+  <summary>¿Puedo fusionar dos clientes que quedaron duplicados por error?</summary>
+  <p class="faq-body">No hay un botón para fusionarlos — si ya se duplicó, pide que un administrador lo revise directamente en la base de datos. Por eso conviene revisar bien el aviso de duplicado antes de forzar el guardado.</p>
+</details>
+
+</main>
+<script>
+var _manualRol = new URLSearchParams(window.location.search).get('rol');
+if (_manualRol) { try { sessionStorage.setItem('_manualRol', _manualRol); } catch (e) {} }
+else { try { _manualRol = sessionStorage.getItem('_manualRol'); } catch (e) {} }
+
+function _ocultarSoloAdmin() {
+  if (_manualRol === 'admin') return;
+  document.querySelectorAll('a[href="12-admin.html"]').forEach(function (a) { a.remove(); });
+}
+_ocultarSoloAdmin();
+
+if (window.location.pathname !== '/manual/') {
+  history.replaceState(null, document.title, '/manual/');
+}
+
+function _escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _irA(href) {
+  fetch('content/' + href)
+    .then(function (r) { if (!r.ok) throw new Error('404'); return r.text(); })
+    .then(function (html) {
+      document.getElementById('main-content').innerHTML = html;
+      window.scrollTo(0, 0);
+      document.querySelectorAll('nav.toc a').forEach(function (link) {
+        link.classList.toggle('active', link.getAttribute('href') === href);
+      });
+      _ocultarSoloAdmin();
+    })
+    .catch(function () { window.location.href = href; });
+}
+
+document.addEventListener('click', function (e) {
+  var a = e.target.closest('a[href$=".html"]');
+  if (!a || a.target === '_blank' || /^https?:\/\//.test(a.getAttribute('href'))) return;
+  e.preventDefault();
+  _irA(a.getAttribute('href'));
+  var results = document.getElementById('search-results');
+  var input = document.getElementById('manual-search');
+  if (results && a.closest('.search-results')) {
+    results.hidden = true;
+    if (input) input.value = '';
+  }
+});
+
+(function () {
+  var input = document.getElementById('manual-search');
+  var box = document.getElementById('search-results');
+  if (!input || !box) return;
+  var index = null;
+
+  function cargar() {
+    if (index) return Promise.resolve(index);
+    return fetch('search-index.json').then(function (r) { return r.json(); }).then(function (data) { index = data; return data; });
+  }
+
+  input.addEventListener('input', function () {
+    var q = input.value.trim().toLowerCase();
+    if (!q) { box.hidden = true; box.innerHTML = ''; return; }
+    cargar().then(function (data) {
+      var matches = data.filter(function (item) {
+        return item.label.toLowerCase().indexOf(q) !== -1 || item.text.toLowerCase().indexOf(q) !== -1;
+      }).slice(0, 8);
+      if (!matches.length) {
+        box.innerHTML = '<div class="search-empty">Sin resultados para «' + _escHtml(input.value.trim()) + '»</div>';
+        box.hidden = false;
+        return;
+      }
+      box.innerHTML = matches.map(function (item) {
+        var idx = item.text.toLowerCase().indexOf(q);
+        var snippet = idx >= 0
+          ? '…' + item.text.substring(Math.max(0, idx - 40), idx + 90) + '…'
+          : item.text.substring(0, 90) + '…';
+        return '<a href="' + item.href + '" class="search-result">'
+          + '<span class="ico">' + item.icon + '</span>'
+          + '<div><strong>' + _escHtml(item.label) + '</strong><small>' + _escHtml(snippet) + '</small></div>'
+          + '</a>';
+      }).join('');
+      box.hidden = false;
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('.search-box')) box.hidden = true;
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { box.hidden = true; input.blur(); }
+  });
+})();
+</script>
+</body>
+</html>

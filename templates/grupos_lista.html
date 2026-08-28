@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Grupos de Viaje — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">🧳 Grupos de Viaje</h1>
+  <a href="/grupos/nuevo" class="btn btn-primary">+ Nuevo Grupo</a>
+</div>
+
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="get" action="/grupos" style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div class="form-field" style="flex:1; min-width:220px; margin:0;">
+        <label class="field-label">Buscar</label>
+        <input class="field-input" type="search" name="q" placeholder="Nombre o destino..." value="{{ q }}">
+      </div>
+      <div class="form-field" style="margin:0;">
+        <label class="field-label">Estado</label>
+        <select class="field-select" name="estado">
+          {% for e in ["ACTIVO", "CERRADO", "CANCELADO", "Todos"] %}
+          <option value="{{ e }}" {% if estado == e %}selected{% endif %}>{{ e }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-outline">Filtrar</button>
+    </form>
+  </div>
+</div>
+
+{% if not grupos %}
+<div class="card"><div class="card-body">Sin grupos que coincidan con el filtro.</div></div>
+{% else %}
+<div class="card">
+  <table style="width:100%;">
+    <thead>
+      <tr><th>Grupo</th><th>Destino</th><th>Fechas</th><th>Cupo</th><th>Estado</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for g in grupos %}
+      <tr>
+        <td><a href="/grupos/{{ g.id_grupo }}">🧳 {{ g.nombre_grupo }}</a></td>
+        <td>{{ g.destino }}</td>
+        <td>{{ g.fecha_salida }} a {{ g.fecha_regreso }}</td>
+        <td>
+          {% if g.pax_ocupados > g.cupos_bloqueados %}
+          <span class="badge badge-red">{{ g.pax_ocupados }}/{{ g.cupos_bloqueados }}</span>
+          {% else %}
+          <span class="badge badge-green">{{ g.pax_ocupados }}/{{ g.cupos_bloqueados }}</span>
+          {% endif %}
+        </td>
+        <td>{{ g.estado }}</td>
+        <td><a href="/grupos/{{ g.id_grupo }}" class="btn btn-outline" style="font-size:0.78rem; padding:4px 10px;">Ver</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% endblock %}

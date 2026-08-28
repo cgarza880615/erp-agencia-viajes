@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}Ingresos de Oficina — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:6px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">💵 Ingresos de Oficina</h1>
+  <a href="/ingresos/exportar?periodo={{ periodo }}&fecha_ini={{ f_ini }}&fecha_fin={{ f_fin }}&categoria={{ filtro_cat }}"
+     class="btn btn-outline" style="font-size:0.82rem;">📊 Exportar Excel</a>
+</div>
+<p class="page-subtitle" style="margin-bottom:20px;">
+  Aportaciones de capital, préstamos e ingresos extraordinarios.
+  Los abonos de clientes se registran dentro de cada itinerario y se consolidan en el
+  <a href="/libro-diario">Libro Diario</a>.
+</p>
+
+{% if flash %}
+<div class="alerta-inline alerta-{% if flash.tipo == 'ok' %}warning{% else %}critica{% endif %}"
+     style="margin-bottom:16px;">{{ flash.texto }}</div>
+{% endif %}
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="get" action="/ingresos"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Período</label>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+          {% for val, lbl in [('hoy','Hoy'),('semana','Semana'),('mes','Este mes'),('todo','Todo')] %}
+          <button type="submit" name="periodo" value="{{ val }}"
+                  class="btn {% if periodo == val %}btn-primary{% else %}btn-outline{% endif %}"
+                  style="font-size:0.78rem; padding:5px 12px;">{{ lbl }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Desde</label>
+        <input class="field-input" type="date" name="fecha_ini" value="{{ f_ini }}" style="width:140px;">
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Hasta</label>
+        <input class="field-input" type="date" name="fecha_fin" value="{{ f_fin }}" style="width:140px;">
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Categoría</label>
+        <select name="categoria" class="field-select" style="width:220px;">
+          <option value="">Todas</option>
+          {% for cat in cats_existentes %}
+          <option value="{{ cat }}" {% if filtro_cat == cat %}selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" name="periodo" value="custom"
+              class="btn btn-outline" style="font-size:0.82rem; align-self:flex-end;">🔍 Filtrar</button>
+    </form>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:14px; margin-bottom:20px;">
+  <div class="card kpi-card">
+    <div class="kpi-label">💰 Total ingresos de oficina</div>
+    <div class="kpi-value money-positive">${{ '{:,.2f}'.format(total_activo) }}</div>
+    <div class="kpi-sub">MXN</div>
+  </div>
+  <div class="card kpi-card">
+    <div class="kpi-label">🔢 Movimientos</div>
+    <div class="kpi-value" style="font-size:1.6rem;">{{ registros | selectattr('estado','equalto','ACTIVO') | list | length }}</div>
+    <div class="kpi-sub">activos</div>
+  </div>
+</div>
+
+<!-- Desglose por categoría -->
+{% if por_categoria %}
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">📊 Desglose por categoría</div>
+  <div class="card-body" style="padding:12px 20px;">
+    {% for cat, tot in por_categoria %}
+    <div style="display:flex; justify-content:space-between; align-items:center;
+                padding:5px 0; border-bottom:1px solid var(--border); font-size:0.875rem;">
+      <span>{{ cat }}</span>
+      <strong class="money-positive">${{ '{:,.2f}'.format(tot) }}</strong>
+    </div>
+    {% endfor %}
+    <div style="display:flex; justify-content:space-between; padding:8px 0;
+                font-weight:700; font-size:0.9rem; border-top:2px solid var(--border); margin-top:4px;">
+      <span>TOTAL</span>
+      <span class="money-positive">${{ '{:,.2f}'.format(total_activo) }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Formulario de capital / ingreso extraordinario -->
+<details class="card" style="margin-bottom:20px;">
+  <summary style="padding:12px 20px; cursor:pointer; font-weight:600; font-size:0.9rem; list-style:none; display:flex; align-items:center; gap:8px;">
+    ➕ Registrar ingreso de capital / inversión
+  </summary>
+  <div class="card-body" style="border-top:1px solid var(--border);">
+    <form method="post" action="/ingresos">
+      <div class="form-grid">
+        <div class="form-field">
+          <label class="field-label">Categoría *</label>
+          <select name="categoria" class="field-select" required>
+            <option value="">Seleccionar...</option>
+            {% for cat in categorias %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Concepto / Descripción</label>
+          <input class="field-input" type="text" name="concepto" placeholder="Detalle del ingreso...">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Monto *</label>
+          <input class="field-input field-money" type="number" step="0.01" min="0.01"
+                 name="monto" required placeholder="0.00">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Moneda</label>
+          <select name="moneda" class="field-select">
+            <option value="MXN">MXN — Pesos</option>
+            <option value="USD">USD — Dólares</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Método de pago</label>
+          <select name="metodo_pago" class="field-select">
+            <option value="">—</option>
+            {% for m in ['Efectivo','Transferencia','Depósito bancario','Cheque','Tarjeta de Crédito/Débito'] %}
+            <option value="{{ m }}">{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Fecha</label>
+          <input class="field-input" type="date" name="fecha_pago" value="{{ today }}">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" style="margin-top:4px;">💾 Registrar ingreso</button>
+    </form>
+  </div>
+</details>
+
+<!-- Tabla completa -->
+{% if registros %}
+<div class="card">
+  <div style="padding:10px 20px; border-bottom:1px solid var(--border);">
+    <input class="field-input" type="search" id="inp-buscar"
+           placeholder="Buscar por concepto, cliente, categoría..."
+           style="max-width:340px; font-size:0.85rem;"
+           oninput="filtrar(this.value)">
+  </div>
+  <div style="overflow-x:auto;">
+    <table id="tabla-ing">
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Categoría / Concepto</th>
+          <th style="text-align:right;">Monto</th>
+          <th>Método</th>
+          <th>Usuario</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tbody-ing">
+        {% for r in registros %}
+        <tr {% if r.estado == 'CANCELADO' %}style="opacity:0.45;"{% endif %}
+            data-txt="{{ (r.concepto ~ ' ' ~ (r.categoria or '')) | lower }}">
+          <td style="font-size:0.82rem; white-space:nowrap; color:var(--text2);">{{ r.fecha_pago }}</td>
+          <td>
+            <div style="font-weight:500; font-size:0.875rem;">{{ r.categoria or '—' }}</div>
+            {% if r.concepto and r.concepto != r.categoria %}
+            <div style="font-size:0.78rem; color:var(--text2);">{{ r.concepto }}</div>
+            {% endif %}
+          </td>
+          <td style="text-align:right; font-weight:600; color:var(--primary); white-space:nowrap;">
+            ${{ '{:,.2f}'.format(r.monto) }}
+            <div style="font-size:0.72rem; font-weight:400; color:var(--text2);">{{ r.moneda }}</div>
+          </td>
+          <td style="font-size:0.82rem; color:var(--text2);">{{ r.metodo_pago or '—' }}</td>
+          <td style="font-size:0.78rem; color:var(--text2);">{{ r.usuario_creador or '—' }}</td>
+          <td>
+            {% if r.estado == 'CANCELADO' %}
+              <span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
+            {% else %}
+              <span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.estado == 'ACTIVO' and not r.id_reserva %}
+            <details style="font-size:0.78rem;">
+              <summary style="cursor:pointer; color:var(--danger);">Anular</summary>
+              <form method="post" action="/ingresos/{{ r.id_movimiento }}/anular"
+                    style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                <input class="field-input" type="text" name="motivo"
+                       placeholder="Motivo..." style="font-size:0.78rem; width:140px;">
+                <button type="submit" class="btn btn-outline"
+                        style="font-size:0.72rem; color:var(--danger); border-color:var(--danger); padding:3px 8px;">
+                  OK
+                </button>
+              </form>
+            </details>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div style="padding:10px 20px; border-top:2px solid var(--border); background:#f8fafc;
+              font-size:0.875rem; font-weight:700;">
+    Total activo: <span class="money-positive">${{ '{:,.2f}'.format(total_activo) }} MXN</span>
+  </div>
+</div>
+
+<script>
+function filtrar(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#tbody-ing tr').forEach(tr => {
+    tr.style.display = (!q || (tr.dataset.txt||'').includes(q)) ? '' : 'none';
+  });
+}
+</script>
+{% else %}
+<div class="card">
+  <div style="padding:40px; text-align:center; color:var(--text2);">
+    No hay ingresos en este período.
+  </div>
+</div>
+{% endif %}
+
+<style>
+.kpi-card { padding:16px 20px; }
+.kpi-label { font-size:0.78rem; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+.kpi-value { font-size:1.7rem; font-weight:700; line-height:1.1; }
+.kpi-sub   { font-size:0.75rem; color:var(--text2); margin-top:4px; }
+details.card > summary { border-radius:var(--radius); }
+</style>
+
+{% endblock %}

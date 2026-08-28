@@ -1,0 +1,28 @@
+<div class="crumb"><a href="index.html">Manual</a> / Torre de Control</div>
+<div class="eyebrow">Módulo 1</div>
+<h1>🚨 Torre de Control</h1>
+<p class="lede">Es la primera pantalla que ves al entrar. Un resumen de todo el negocio al día de hoy: cuántos viajes hay activos, cuánto se ha cobrado este mes, y qué necesita atención.</p>
+
+<h2>Qué muestra cada tarjeta</h2>
+<table class="field-ref">
+  <tr><th>Tarjeta</th><th>Qué significa</th></tr>
+  <tr><td><strong>Viajes Activos</strong></td><td>Itinerarios en estado ACTIVO ahora mismo (no cancelados, no incobrables).</td></tr>
+  <tr><td><strong>Pagos Atrasados</strong></td><td>Parcialidades de clientes cuya fecha programada ya pasó y no se han cubierto.</td></tr>
+  <tr><td><strong>Deuda Post-Viaje</strong></td><td>Itinerarios que ya regresaron pero todavía tienen saldo pendiente del cliente.</td></tr>
+  <tr><td><strong>Movimientos Hoy</strong></td><td>Cuántos cobros o pagos se registraron en el día de hoy.</td></tr>
+  <tr><td><strong>Cobrado MXN</strong></td><td>Total cobrado a clientes en el mes que se está viendo (cambia con el selector de período).</td></tr>
+  <tr><td><strong>Saldo Pendiente MXN</strong></td><td>Lo que todos los clientes activos deben en total, sumado.</td></tr>
+</table>
+
+<div class="callout tip">
+  <strong>Tip</strong>
+  El selector "Período de caja" (Mes / Año) solo afecta las tarjetas de Caja Real y las gráficas — no afecta los KPIs de arriba, que siempre son del momento actual.
+</div>
+
+<h2>Próximas salidas</h2>
+<p>Lista los itinerarios cuya fecha de salida cae dentro de los próximos 30 días, con su saldo pendiente en rojo si aún debe algo el cliente. Es la forma más rápida de ver "quién sale pronto y quién no ha liquidado".</p>
+
+<div class="callout note">
+  <strong>Nota</strong>
+  El número rojo junto a "Torre de Control" en la barra lateral es la cuenta de alertas críticas del sistema — coincide con lo que verás en el módulo de <a href="02-alertas.html">Alertas</a>.
+</div>

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}ERP Agencia de Viajes{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<!-- Botón hamburguesa (solo visible en móvil) -->
+<button class="hamburger" id="btn-hamburger" aria-label="Abrir menú" onclick="toggleSidebar()">☰</button>
+
+<!-- Overlay oscuro al abrir sidebar en móvil -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <div style="background:white; border-radius:50%; width:88px; height:88px;
+                  display:flex; align-items:center; justify-content:center;
+                  margin:0 auto 10px; padding:10px; box-sizing:border-box;
+                  box-shadow:0 4px 16px rgba(0,0,0,0.25);">
+        <img src="/static/img/logo.png" alt="Tu Agencia de Viajes"
+             style="width:68px; height:auto; display:block;">
+      </div>
+      <span>Tours Caribe</span>
+    </div>
+
+    <ul class="nav-links">
+      <li>
+        <a href="/dashboard" {% if active == 'dashboard' %}class="active"{% endif %}
+           style="position:relative;">
+          🚨 Torre de Control
+          {% if n_criticas > 0 %}
+          <span class="nav-badge">{{ n_criticas }}</span>
+          {% endif %}
+        </a>
+      </li>
+      <li>
+        <a href="/alertas" {% if active == 'alertas' %}class="active"{% endif %}>
+          🔔 Alertas
+        </a>
+      </li>
+      <li>
+        <a href="/clientes" {% if active == 'clientes' %}class="active"{% endif %}>
+          👥 Clientes
+        </a>
+      </li>
+      <li>
+        <a href="/cotizaciones" {% if active == 'cotizaciones' %}class="active"{% endif %}>
+          📄 Cotizaciones
+        </a>
+      </li>
+      <li>
+        <a href="/bitacora" {% if active == 'bitacora' %}class="active"{% endif %}>
+          🗂️ Itinerarios
+        </a>
+      </li>
+      <li>
+        <a href="/grupos" {% if active == 'grupos' %}class="active"{% endif %}>
+          🧳 Grupos de Viaje
+        </a>
+      </li>
+      <li>
+        <a href="/calendario" {% if active == 'calendario' %}class="active"{% endif %}>
+          🗓️ Calendario
+        </a>
+      </li>
+      <li>
+        <a href="/ingresos" {% if active == 'ingresos' %}class="active"{% endif %}>
+          💰 Ingresos
+        </a>
+      </li>
+      <li>
+        <a href="/egresos" {% if active == 'egresos' %}class="active"{% endif %}>
+          🏢 Egresos
+        </a>
+      </li>
+      <li>
+        <a href="/libro-diario" {% if active == 'libro' %}class="active"{% endif %}>
+          📊 Libro Diario
+        </a>
+      </li>
+      {% if mostrar_whatsapp %}
+      <li>
+        <a href="/wa" {% if active == 'wa' %}class="active"{% endif %}
+           style="position:relative;">
+          💬 WhatsApp
+          {% if n_wa_nuevas > 0 %}
+          <span class="nav-badge">{{ n_wa_nuevas }}</span>
+          {% endif %}
+        </a>
+      </li>
+      {% endif %}
+      <li>
+        <a href="/buscar" {% if active == 'buscar' %}class="active"{% endif %}>
+          🔍 Buscar
+        </a>
+      </li>
+      <li>
+        <a href="/admin/auditoria" {% if active == 'auditoria' %}class="active"{% endif %}>
+          📋 Auditoría
+        </a>
+      </li>
+      <li>
+        <a href="/manual" target="_blank" rel="noopener">
+          📘 Manual
+        </a>
+      </li>
+      {% if rol == 'admin' %}
+      <li>
+        <a href="/admin" {% if active == 'admin' %}class="active"{% endif %}>
+          ⚙️ Admin
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+
+    <div class="sidebar-footer">
+      <div>
+        <span class="username">{{ usuario }}</span>
+        <span class="rol-badge">{{ rol }}</span>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:6px;">
+        <a href="/cambiar-password" title="Cambiar contraseña"
+           style="font-size:0.7rem; color:rgba(255,255,255,0.55); text-decoration:none;
+                  padding:3px 7px; border:1px solid rgba(255,255,255,0.2); border-radius:4px;">
+          🔑 Pwd
+        </a>
+        <a href="/logout" class="btn-logout" style="flex:1; text-align:center;">Salir</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Contenido principal ── -->
+  <main class="main-content">
+
+    <!-- Flash de login (una sola vez por sesión) -->
+    {% if flash %}
+    <div class="flash flash-{{ flash.tipo }}" id="flash-banner">
+      <span>{{ flash.texto }}</span>
+      <button onclick="document.getElementById('flash-banner').remove()"
+              style="background:none; border:none; cursor:pointer; font-size:1rem;
+                     color:inherit; opacity:0.6; margin-left:auto; padding:0 4px;">✕</button>
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+</div>
+<script>
+  history.replaceState(null, document.title, '/');
+
+  // ── Sidebar móvil ──────────────────────────────────────────────────────────
+  function toggleSidebar() {
+    var sb  = document.getElementById('sidebar');
+    var ov  = document.getElementById('sidebar-overlay');
+    var btn = document.getElementById('btn-hamburger');
+    var open = sb.classList.toggle('is-open');
+    ov.classList.toggle('is-open', open);
+    btn.textContent = open ? '✕' : '☰';
+    btn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  function closeSidebar() {
+    var sb  = document.getElementById('sidebar');
+    var ov  = document.getElementById('sidebar-overlay');
+    var btn = document.getElementById('btn-hamburger');
+    sb.classList.remove('is-open');
+    ov.classList.remove('is-open');
+    btn.textContent = '☰';
+    btn.setAttribute('aria-label', 'Abrir menú');
+    document.body.style.overflow = '';
+  }
+  // Cerrar sidebar al navegar (para mobile)
+  document.querySelectorAll('.sidebar a').forEach(function(a) {
+    a.addEventListener('click', function() {
+      if (window.innerWidth < 640) closeSidebar();
+    });
+  });
+  // Cerrar sidebar con ESC
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeSidebar();
+  });
+</script>
+
+{% if usuario %}
+{% include "asistente_ia_widget.html" %}
+{% endif %}
+
+<script>
+(function () {
+  // Easter egg: 6 clics rápidos en cualquier parte, o el código Konami, disparan
+  // una sorpresa con confetti y un mensaje random con tema de viajes.
+  var clicks = [];
+  document.addEventListener('click', function () {
+    var ahora = Date.now();
+    clicks.push(ahora);
+    clicks = clicks.filter(function (t) { return ahora - t < 1200; });
+    if (clicks.length >= 6) { clicks = []; dispararSorpresa(); }
+  });
+
+  var konami = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+  var progreso = 0;
+  document.addEventListener('keydown', function (e) {
+    var tecla = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    progreso = (tecla === konami[progreso]) ? progreso + 1 : 0;
+    if (progreso === konami.length) { progreso = 0; dispararSorpresa(); }
+  });
+
+  var mensajes = [
+    '🏖️ Vacaciones mentales activadas. Vuelve al trabajo en 3, 2, 1…',
+    '✈️ Nivel de frustración detectado: se recomienda un vuelo directo a Cancún.',
+    '🌴 Encontraste el easter egg. Tu Agencia de Viajes te recomienda un viaje YA.',
+    '🥥 Respira. Imagina que estás en Playa del Carmen ahora mismo.',
+    '🛫 Cotización sugerida: tú, una hamaca, cero notificaciones.',
+    '🐢 Modo tortuga activado: todo va a estar bien.',
+    '✨ Hoy amaneciste increíble, que quede claro.',
+    '💪 Eres más capaz de lo que este sistema te está haciendo sentir ahora mismo.',
+    '🌞 Tómate un respiro, lo estás haciendo mejor de lo que crees.',
+    '🎉 Encontraste el easter egg secreto. Ya eres la persona más lista del equipo hoy.',
+    '☕ Un café, un estiramiento, y sigues arrasando.',
+    '🌊 Como las olas: a veces se agita, pero siempre regresa la calma.',
+    '🌟 Recordatorio random: estás haciendo un gran trabajo.',
+    '🦩 Oficialmente eres parte del 1% que encuentra easter eggs. Presume.',
+    '🍹 Este sistema no te define, tú a él sí.',
+    '🌅 Hoy es un buen día para lograr algo bueno, empezando por este clic.',
+    '🐬 Delfín certificado: encontraste algo que casi nadie más ve.',
+    '💌 Alguien debería decirte que haces un excelente trabajo. Hoy te toca a ti escucharlo.',
+  ];
+
+  function dispararSorpresa() {
+    var msg = mensajes[Math.floor(Math.random() * mensajes.length)];
+
+    var burbuja = document.createElement('div');
+    burbuja.textContent = msg;
+    burbuja.style.cssText = 'position:fixed;top:16px;left:50%;transform:translateX(-50%) translateY(-20px);' +
+      'background:#0a2540;color:#fff;padding:12px 20px;border-radius:999px;font-size:14px;font-weight:600;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.25);z-index:99999;opacity:0;transition:opacity .3s,transform .3s;' +
+      'max-width:90vw;text-align:center;';
+    document.body.appendChild(burbuja);
+    requestAnimationFrame(function () {
+      burbuja.style.opacity = '1';
+      burbuja.style.transform = 'translateX(-50%) translateY(0)';
+    });
+    setTimeout(function () {
+      burbuja.style.opacity = '0';
+      setTimeout(function () { burbuja.remove(); }, 300);
+    }, 3200);
+
+    var colores = ['#00b8d4', '#ffca28', '#26a69a', '#ef5350', '#7e57c2', '#ffffff'];
+    for (var i = 0; i < 90; i++) {
+      var pieza = document.createElement('div');
+      var izq = Math.random() * 100;
+      var tam = 6 + Math.random() * 6;
+      pieza.style.cssText = 'position:fixed;top:-10px;left:' + izq + 'vw;width:' + tam + 'px;height:' + (tam * 0.4) + 'px;' +
+        'background:' + colores[Math.floor(Math.random() * colores.length)] + ';z-index:99998;pointer-events:none;' +
+        'opacity:.9;border-radius:2px;';
+      document.body.appendChild(pieza);
+      (function (el) {
+        var duracion = 1800 + Math.random() * 1400;
+        var giro = Math.random() * 720 - 360;
+        var deriva = Math.random() * 160 - 80;
+        el.animate([
+          { transform: 'translate(0,0) rotate(0deg)', opacity: .9 },
+          { transform: 'translate(' + deriva + 'px, 100vh) rotate(' + giro + 'deg)', opacity: 0 },
+        ], { duration: duracion, easing: 'ease-in' });
+        setTimeout(function () { el.remove(); }, duracion + 50);
+      })(pieza);
+    }
+  }
+})();
+</script>
+</body>
+</html>

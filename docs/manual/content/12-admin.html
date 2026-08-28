@@ -1,0 +1,35 @@
+<div class="crumb"><a href="index.html">Manual</a> / Admin</div>
+<div class="eyebrow">Módulo 12</div>
+<h1>⚙️ Admin</h1>
+<p class="lede">Configuración del sistema, usuarios y métricas de rentabilidad — visible solo para cuentas con rol Admin.</p>
+
+<h2>Usuarios</h2>
+<table class="field-ref">
+  <tr><th>Rol</th><th>Puede</th></tr>
+  <tr><td>Admin</td><td>Todo: cancelar reservas, marcar incobrables, gestionar usuarios, ver Auditoría.</td></tr>
+  <tr><td>Operadora</td><td>Operación diaria: crear/editar itinerarios, cobros, pagos a proveedor, cotizaciones.</td></tr>
+</table>
+<div class="callout warning">
+  <strong>Contraseñas</strong>
+  Al crear un usuario o restablecer una contraseña, el sistema exige una contraseña que cumpla los requisitos mínimos de seguridad y guarda el historial — no deja reutilizar una de las últimas usadas.
+</div>
+<div class="callout note">
+  <strong>Nota</strong>
+  Nadie puede cambiarse el rol a sí mismo — evita que una cuenta se auto-otorgue permisos por error.
+</div>
+
+<h2>Métodos de Pago</h2>
+<p>Lista actual: <strong>Efectivo</strong>, <strong>Transferencia</strong>, <strong>Tarjeta de Crédito/Débito</strong>, <strong>Depósito bancario</strong> y <strong>Cheque</strong>. Se simplificó a propósito — antes existían entradas separadas para PayPal, Stripe y OXXO Pay que en la práctica nunca se usaban y solo generaban confusión al elegir.</p>
+
+<h2>Rentabilidad</h2>
+<p>Vista consolidada de utilidad del negocio, separando lo ya cobrado (utilidad real) de lo proyectado sobre reservas aún no liquidadas — útil para decisiones de negocio, no para el día a día operativo.</p>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>¿Por qué no me deja cambiar mi propio rol?</summary>
+  <p class="faq-body">Es intencional: ningún usuario puede cambiarse el rol a sí mismo, para evitar que una cuenta se auto-otorgue permisos de administrador por error o sin supervisión. Pide a otro admin que lo haga por ti.</p>
+</details>
+<details class="faq">
+  <summary>¿Por qué el sistema rechaza la contraseña que quiero poner?</summary>
+  <p class="faq-body">Debe cumplir los requisitos mínimos de seguridad (longitud y complejidad) y no puede ser una de las últimas contraseñas ya usadas por ese usuario — el sistema guarda ese historial para evitar reciclarlas.</p>
+</details>

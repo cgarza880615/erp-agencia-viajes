@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Auditoría de Anulaciones — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  {% if es_admin %}
+  <a href="/admin" class="btn btn-outline" style="font-size:0.8rem;">← Admin</a>
+  {% endif %}
+  <h1 class="page-title" style="margin:0; flex:1;">📋 Auditoría de Anulaciones</h1>
+  <a href="/admin/auditoria/exportar?mes={{ mes }}&anio={{ anio }}&usuario={{ f_usuario }}&tipo={{ f_tipo }}"
+     class="btn btn-outline" style="font-size:0.82rem;">📊 Exportar Excel</a>
+</div>
+
+<!-- Filtros -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <form method="get" action="/admin/auditoria"
+          style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Mes</label>
+        <select name="mes" class="field-select" style="width:130px;">
+          <option value="TODOS" {% if mes == 'TODOS' %}selected{% endif %}>Todos</option>
+          {% for k, v in meses.items() %}
+          <option value="{{ k }}" {% if mes == k %}selected{% endif %}>{{ v }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Año</label>
+        <select name="anio" class="field-select" style="width:100px;">
+          {% for a in anios %}
+          <option value="{{ a }}" {% if anio == a %}selected{% endif %}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Usuario</label>
+        <select name="usuario" class="field-select" style="width:140px;">
+          <option value="">Todos</option>
+          {% for u in lista_usuarios %}
+          <option value="{{ u }}" {% if f_usuario == u %}selected{% endif %}>{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="field-label" style="display:block; margin-bottom:4px;">Tipo</label>
+        <select name="tipo" class="field-select" style="width:120px;">
+          <option value="">Todos</option>
+          <option value="INGRESO" {% if f_tipo == 'INGRESO' %}selected{% endif %}>INGRESO</option>
+          <option value="EGRESO"  {% if f_tipo == 'EGRESO'  %}selected{% endif %}>EGRESO</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary" style="font-size:0.82rem; align-self:flex-end;">
+        🔍 Filtrar
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- KPIs -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:14px; margin-bottom:20px;">
+  <div class="card kpi-card">
+    <div class="kpi-label">💸 Total Anulado</div>
+    <div class="kpi-value" style="color:var(--danger);">${{ '{:,.2f}'.format(total_anulado) }}</div>
+  </div>
+  <div class="card kpi-card">
+    <div class="kpi-label">🔢 Anulaciones</div>
+    <div class="kpi-value" style="font-size:1.6rem;">{{ registros | length }}</div>
+  </div>
+  <div class="card kpi-card">
+    <div class="kpi-label">👥 Usuarios</div>
+    <div class="kpi-value" style="font-size:1.6rem;">{{ usuarios_unicos }}</div>
+  </div>
+</div>
+
+{% if registros %}
+<div class="card">
+  <table>
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Usuario</th>
+        <th>Tipo</th>
+        <th style="text-align:right;">Monto</th>
+        <th>Razón</th>
+        <th>Movimiento Original</th>
+        <th>Movimiento / Itinerario</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in registros %}
+      <tr>
+        <td style="font-size:0.82rem; white-space:nowrap; color:var(--text2);">{{ r.fecha_anulacion }}</td>
+        <td style="font-weight:500;">{{ r.usuario_anulo or '—' }}</td>
+        <td>
+          {% if r.tipo_movimiento == 'INGRESO' %}
+            <span class="badge badge-green" style="font-size:0.65rem;">INGRESO</span>
+          {% else %}
+            <span class="badge badge-red" style="font-size:0.65rem;">EGRESO</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right; font-weight:600; color:var(--danger); white-space:nowrap;">
+          ${{ '{:,.2f}'.format(r.monto_anulado or 0) }}
+        </td>
+        <td style="font-size:0.85rem;">{{ r.razon_anulacion or '—' }}</td>
+        <td style="font-size:0.78rem; color:var(--text2);">{{ r.movimiento_original or '—' }}</td>
+        <td style="font-size:0.78rem; white-space:nowrap;">
+          #{{ r.id_movimiento }}
+          {% if r.id_reserva %}
+          · <a href="/bitacora/{{ r.id_reserva }}" class="btn btn-outline" style="font-size:0.72rem; padding:2px 8px;">Itin #{{ r.id_reserva }} →</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div style="padding:40px; text-align:center; color:var(--text2);">
+    No hay anulaciones registradas para el período seleccionado.
+  </div>
+</div>
+{% endif %}
+
+<style>
+.kpi-card { padding:16px 20px; }
+.kpi-label { font-size:0.78rem; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
+.kpi-value { font-size:1.7rem; font-weight:700; line-height:1.1; }
+</style>
+{% endblock %}

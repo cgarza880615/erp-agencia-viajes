@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}Admin — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">⚙️ Administración</h1>
+  <a href="/admin/auditoria" class="btn btn-outline" style="font-size:0.82rem;">📋 Auditoría</a>
+  <a href="/admin/rentabilidad" class="btn btn-outline" style="font-size:0.82rem;">📊 Rentabilidad</a>
+  <a href="/admin/wa" class="btn btn-outline" style="font-size:0.82rem;">💬 WhatsApp</a>
+</div>
+
+{% if flash %}
+<div class="alerta-inline alerta-{% if flash.tipo == 'ok' %}warning{% else %}critica{% endif %}"
+     style="margin-bottom:16px;">{{ flash.texto }}</div>
+{% endif %}
+
+<!-- Tabs -->
+<div style="display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:24px;">
+  <button onclick="showTab('usuarios')" id="tab-btn-usuarios"
+          class="tab-btn {% if tab == 'usuarios' %}tab-active{% endif %}">
+    👥 Usuarios
+  </button>
+  <button onclick="showTab('config')" id="tab-btn-config"
+          class="tab-btn {% if tab == 'config' %}tab-active{% endif %}">
+    🔧 Configuración
+  </button>
+</div>
+
+<!-- ══════════════════════════════════════════ TAB USUARIOS ══════════════ -->
+<div id="tab-usuarios" class="tab-panel" style="display:{% if tab == 'usuarios' %}block{% else %}none{% endif %};">
+
+  <!-- Lista de usuarios -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">👥 Usuarios del sistema</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Rol</th>
+          <th>Último cambio de contraseña</th>
+          <th>Última actividad</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in usuarios %}
+        <tr>
+          <td>
+            <strong>{{ u.usuario }}</strong>
+            {% if u.primer_login %}<span class="badge badge-yellow" style="font-size:0.65rem; margin-left:6px;">1er login pendiente</span>{% endif %}
+          </td>
+          <td>
+            <span class="badge {% if u.rol == 'admin' %}badge-blue{% else %}badge-green{% endif %}">
+              {{ u.rol }}
+            </span>
+          </td>
+          <td style="font-size:0.82rem; color:var(--text2);">{{ u.ultima_cambio_password or '—' }}</td>
+          <td style="font-size:0.82rem; color:var(--text2);">{{ sesiones.get(u.usuario, '—') }}</td>
+          <td>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+
+              <!-- Cambiar rol -->
+              {% if u.usuario != usuario %}
+              <details style="display:inline-block;">
+                <summary style="cursor:pointer; font-size:0.78rem; color:var(--primary); list-style:none; padding:3px 8px; border:1px solid var(--primary); border-radius:4px;">
+                  Cambiar rol
+                </summary>
+                <div style="position:absolute; background:white; border:1px solid var(--border); border-radius:6px; padding:10px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:50; margin-top:4px;">
+                  <form method="post" action="/admin/usuarios/{{ u.usuario }}/rol"
+                        style="display:flex; gap:8px; align-items:center;">
+                    <select name="rol" class="field-select" style="width:110px; font-size:0.82rem;">
+                      <option value="admin"    {% if u.rol == 'admin'    %}selected{% endif %}>admin</option>
+                      <option value="operador" {% if u.rol == 'operador' %}selected{% endif %}>operador</option>
+                    </select>
+                    <button type="submit" class="btn btn-primary" style="font-size:0.78rem; padding:4px 10px;">OK</button>
+                  </form>
+                </div>
+              </details>
+              {% endif %}
+
+              <!-- Resetear contraseña -->
+              <details style="display:inline-block;">
+                <summary style="cursor:pointer; font-size:0.78rem; color:var(--warning); list-style:none; padding:3px 8px; border:1px solid var(--warning); border-radius:4px;">
+                  Reset pwd
+                </summary>
+                <div style="position:absolute; background:white; border:1px solid var(--border); border-radius:6px; padding:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:50; margin-top:4px; min-width:280px;">
+                  <p style="font-size:0.78rem; color:var(--text2); margin:0 0 8px;">
+                    Mín. 8 chars · 1 mayúscula · 1 símbolo ( ? ! $ , . - _ @ # % &amp; * )
+                  </p>
+                  <form method="post" action="/admin/usuarios/{{ u.usuario }}/password"
+                        style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <input class="field-input" type="password" name="password"
+                           placeholder="Nueva contraseña" required
+                           style="width:200px; font-size:0.82rem;">
+                    <button type="submit" class="btn btn-primary"
+                            style="font-size:0.78rem; padding:4px 10px; background:var(--warning);">
+                      Restablecer
+                    </button>
+                  </form>
+                </div>
+              </details>
+
+              <!-- Forzar cambio de contraseña en próximo login -->
+              {% if u.usuario != usuario %}
+              <form method="post" action="/admin/usuarios/{{ u.usuario }}/forzar-login"
+                    style="display:inline;"
+                    onsubmit="return confirm('¿Forzar a {{ u.usuario }} a cambiar su contraseña en el próximo login?')">
+                <button type="submit" class="btn btn-outline"
+                        style="font-size:0.78rem; padding:3px 8px; color:var(--warning); border-color:var(--warning);"
+                        title="Forzar cambio de contraseña en próximo login">
+                  🔄 Forzar login
+                </button>
+              </form>
+              {% endif %}
+
+              <!-- Eliminar -->
+              {% if u.usuario != usuario %}
+              <details style="display:inline-block;">
+                <summary style="cursor:pointer; font-size:0.78rem; color:var(--danger); list-style:none; padding:3px 8px; border:1px solid var(--danger); border-radius:4px;">
+                  Eliminar
+                </summary>
+                <div style="position:absolute; background:white; border:1px solid var(--danger); border-radius:6px; padding:12px; box-shadow:0 4px 12px rgba(0,0,0,0.1); z-index:50; margin-top:4px; min-width:220px;">
+                  <p style="font-size:0.82rem; margin:0 0 10px; color:var(--danger);">
+                    ¿Eliminar a <strong>{{ u.usuario }}</strong>? Esta acción no se puede deshacer.
+                  </p>
+                  <form method="post" action="/admin/usuarios/{{ u.usuario }}/eliminar">
+                    <button type="submit" class="btn btn-primary"
+                            style="font-size:0.78rem; background:var(--danger); width:100%;">
+                      Confirmar eliminación
+                    </button>
+                  </form>
+                </div>
+              </details>
+              {% endif %}
+
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Seguridad global -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">🔐 Seguridad global</div>
+    <div class="card-body" style="padding:16px 20px;">
+      <p style="font-size:0.82rem; color:var(--text2); margin:0 0 12px;">
+        Fuerza a todos los usuarios (excepto al tuyo) a cambiar su contraseña en el próximo inicio de sesión.
+      </p>
+      <details>
+        <summary style="cursor:pointer; display:inline-block; font-size:0.82rem;
+                        color:var(--danger); padding:5px 12px;
+                        border:1px solid var(--danger); border-radius:4px; list-style:none;">
+          ⚠️ Forzar cambio a todos
+        </summary>
+        <div style="margin-top:12px; padding:14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px;">
+          <p style="font-size:0.82rem; color:var(--danger); margin:0 0 10px; font-weight:600;">
+            Todos los usuarios (excepto tú) deberán crear una nueva contraseña al iniciar sesión.
+          </p>
+          <form method="post" action="/admin/usuarios/forzar-todos">
+            <label style="font-size:0.82rem; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+              <input type="checkbox" name="confirmar" required>
+              Entiendo que esto afecta a todos los usuarios activos
+            </label>
+            <button type="submit" class="btn btn-primary"
+                    style="background:var(--danger); font-size:0.82rem;">
+              Confirmar y forzar a todos
+            </button>
+          </form>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Crear nuevo usuario -->
+  <div class="card">
+    <div class="card-header">➕ Crear nuevo usuario</div>
+    <div class="card-body">
+      <p style="font-size:0.82rem; color:var(--text2); margin:0 0 14px;">
+        La contraseña debe tener mínimo 8 caracteres, una mayúscula y un símbolo.
+        El usuario tendrá que cambiarla en su primer login.
+      </p>
+      <form method="post" action="/admin/usuarios/nuevo">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Nombre de usuario *</label>
+            <input class="field-input" type="text" name="usuario" required
+                   placeholder="sin espacios, minúsculas" pattern="[a-z0-9_]+">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Rol *</label>
+            <select name="rol" class="field-select">
+              <option value="operador">operador</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="field-label">Contraseña temporal *</label>
+            <input class="field-input" type="password" name="password" required
+                   placeholder="Mín. 8 · 1 mayúscula · 1 símbolo">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="margin-top:4px;">
+          ➕ Crear usuario
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+
+<!-- ══════════════════════════════════════════ TAB CONFIG ══════════════ -->
+<div id="tab-config" class="tab-panel" style="display:{% if tab == 'config' %}block{% else %}none{% endif %};">
+
+  <!-- Métodos de pago -->
+  <div class="card" style="margin-bottom:20px;">
+    <div class="card-header">💳 Métodos de pago</div>
+    <div class="card-body" style="padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Categoría</th>
+            <th>Estado</th>
+            <th style="width:140px;"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in metodos %}
+          <tr {% if not m.activo %}style="opacity:0.5;"{% endif %}>
+            <td style="font-weight:500;">{{ m.nombre }}</td>
+            <td style="font-size:0.82rem; color:var(--text2);">{{ m.categoria }}</td>
+            <td>
+              {% if m.activo %}
+                <span class="badge badge-green" style="font-size:0.65rem;">Activo</span>
+              {% else %}
+                <span class="badge" style="font-size:0.65rem; background:#f1f5f9; color:#94a3b8;">Inactivo</span>
+              {% endif %}
+            </td>
+            <td>
+              <div style="display:flex; gap:6px;">
+                <form method="post" action="/admin/metodos-pago/{{ m.id }}/toggle">
+                  <button type="submit" class="btn btn-outline"
+                          style="font-size:0.72rem; padding:3px 8px;">
+                    {% if m.activo %}Desactivar{% else %}Activar{% endif %}
+                  </button>
+                </form>
+                <form method="post" action="/admin/metodos-pago/{{ m.id }}/eliminar"
+                      onsubmit="return confirm('¿Eliminar {{ m.nombre }}?')">
+                  <button type="submit" class="btn btn-outline"
+                          style="font-size:0.72rem; padding:3px 8px; color:var(--danger); border-color:var(--danger);">
+                    ✕
+                  </button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Agregar método de pago -->
+  <div class="card">
+    <div class="card-header">➕ Agregar método de pago</div>
+    <div class="card-body">
+      <form method="post" action="/admin/metodos-pago/nuevo"
+            style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div class="form-field">
+          <label class="field-label">Nombre *</label>
+          <input class="field-input" type="text" name="nombre" required
+                 placeholder="Ej: BBVA Transfer">
+        </div>
+        <div class="form-field">
+          <label class="field-label">Categoría</label>
+          <select name="categoria" class="field-select" style="width:150px;">
+            {% for cat in ['Efectivo','Transferencia','Tarjeta','Cheque','Digital','Otro'] %}
+            <option value="{{ cat }}">{{ cat }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="align-self:flex-end;">
+          ➕ Agregar
+        </button>
+      </form>
+    </div>
+  </div>
+
+</div>
+
+<style>
+.tab-btn {
+  padding: 10px 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  color: var(--text2);
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: var(--primary); }
+.tab-active { color: var(--primary) !important; border-bottom-color: var(--primary) !important; }
+</style>
+
+<script>
+function showTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('tab-active'));
+  document.getElementById('tab-' + name).style.display = 'block';
+  document.getElementById('tab-btn-' + name).classList.add('tab-active');
+  history.replaceState(null, '', '/');
+}
+</script>
+
+{% endblock %}

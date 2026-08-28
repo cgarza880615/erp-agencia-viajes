@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block title %}Itinerarios — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:12px;">
+  <h1 class="page-title" style="margin:0;">🗂️ Itinerarios</h1>
+  <div style="display:flex; gap:8px;">
+    <a id="btn-exportar"
+       href="/bitacora/exportar?q={{ q }}&estado={{ estado_sel }}&orden={{ orden_sel }}&creacion={{ creacion_sel }}"
+       class="btn btn-outline" style="font-size:0.82rem;">📊 Exportar Excel</a>
+    <a href="/bitacora/nueva" class="btn btn-primary">+ Nuevo Itinerario</a>
+  </div>
+</div>
+<p class="page-subtitle">Todas las reservas del sistema</p>
+
+<!-- ── Filtros ── -->
+<div class="card" style="margin-bottom:20px;">
+  <form id="filtros-bitacora" onsubmit="return false"
+        style="padding:16px 20px; display:flex; flex-direction:column; gap:12px;">
+
+    <!-- Fila 1: búsqueda + estado + orden -->
+    <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+
+      <input type="search" name="q" id="f-q" value="{{ q }}"
+             placeholder="🔍 Nombre, destino, hotel, localizador, aerolínea, # itin..."
+             class="input-filtro" style="flex:2; min-width:220px;"
+             hx-get="/bitacora/rows"
+             hx-trigger="keyup changed delay:350ms"
+             hx-target="#tabla-wrapper"
+             hx-swap="innerHTML"
+             hx-include="closest form">
+
+      <select name="estado" id="f-estado" class="select-filtro" style="flex:1; min-width:220px;"
+              hx-get="/bitacora/rows"
+              hx-trigger="change"
+              hx-target="#tabla-wrapper"
+              hx-swap="innerHTML"
+              hx-include="closest form">
+        <option value="PROXIMOS_PENDIENTES" {% if estado_sel=='PROXIMOS_PENDIENTES' %}selected{% endif %}>🛫 Próximos — Pendientes de pago</option>
+        <option value="PROXIMOS_LIQUIDADOS" {% if estado_sel=='PROXIMOS_LIQUIDADOS' %}selected{% endif %}>✅ Próximos — Liquidados</option>
+        <option value="HISTORICO_SANO"      {% if estado_sel=='HISTORICO_SANO'      %}selected{% endif %}>🔒 Cerrados — Todo en orden</option>
+        <option value="IRREGULARES"         {% if estado_sel=='IRREGULARES'         %}selected{% endif %}>⚠️ Irregulares — Pendientes</option>
+        <option value="CANCELADO"           {% if estado_sel=='CANCELADO'           %}selected{% endif %}>🛑 Cancelados</option>
+        <option value="INCOBRABLE"          {% if estado_sel=='INCOBRABLE'          %}selected{% endif %}>⛔ Incobrables</option>
+        <option value="TODOS"               {% if estado_sel=='TODOS'               %}selected{% endif %}>🌐 Todos</option>
+      </select>
+
+      <select name="orden" id="f-orden" class="select-filtro" style="min-width:190px;"
+              hx-get="/bitacora/rows"
+              hx-trigger="change"
+              hx-target="#tabla-wrapper"
+              hx-swap="innerHTML"
+              hx-include="closest form">
+        <option value="auto"     {% if orden_sel=='auto'     %}selected{% endif %}>🤖 Orden automático</option>
+        <option value="proxima"  {% if orden_sel=='proxima'  %}selected{% endif %}>📅 Salida más próxima</option>
+        <option value="lejana"   {% if orden_sel=='lejana'   %}selected{% endif %}>📅 Salida más lejana</option>
+        <option value="reciente" {% if orden_sel=='reciente' %}selected{% endif %}>🔢 Itin más reciente (Mayor→Menor)</option>
+        <option value="itin_asc" {% if orden_sel=='itin_asc' %}selected{% endif %}>🔢 Itin más antiguo (Menor→Mayor)</option>
+        <option value="az"       {% if orden_sel=='az'       %}selected{% endif %}>🔤 Cliente A–Z</option>
+      </select>
+
+      <select name="creacion" id="f-creacion" class="select-filtro"
+              hx-get="/bitacora/rows"
+              hx-trigger="change"
+              hx-target="#tabla-wrapper"
+              hx-swap="innerHTML"
+              hx-include="closest form">
+        <option value="todos" {% if creacion_sel=='todos' %}selected{% endif %}>📆 Cualquier fecha</option>
+        <option value="7"     {% if creacion_sel=='7'     %}selected{% endif %}>📆 Últimos 7 días</option>
+        <option value="15"    {% if creacion_sel=='15'    %}selected{% endif %}>📆 Últimos 15 días</option>
+        <option value="30"    {% if creacion_sel=='30'    %}selected{% endif %}>📆 Últimos 30 días</option>
+        <option value="90"    {% if creacion_sel=='90'    %}selected{% endif %}>📆 Últimos 90 días</option>
+      </select>
+
+      <span class="conteo-label" id="conteo">{{ total }} reserva(s)</span>
+    </div>
+  </form>
+</div>
+
+<!-- ── Tabla ── -->
+<div class="card">
+  <div id="tabla-wrapper" style="overflow-x:auto;">
+    <table id="tabla-reservas">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cliente</th>
+          <th class="col-hide-sm">Destino</th>
+          <th>Salida</th>
+          <th class="col-hide-sm">Regreso</th>
+          <th class="col-hide-sm">Venta Total</th>
+          <th class="col-hide-sm">Cobrado</th>
+          <th>Saldo</th>
+          <th>Estado</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in reservas %}
+        <tr>
+          <td><strong>#{{ r.id_reserva }}</strong></td>
+          <td>{{ r.nombre }}</td>
+          <td class="col-hide-sm">{{ r.destino }}</td>
+          <td>{{ r.fecha_salida }}</td>
+          <td class="col-hide-sm">{{ r.fecha_regreso }}</td>
+          <td class="money col-hide-sm">{{ r.venta_total | moneda(r.moneda) }}</td>
+          <td class="money money-positive col-hide-sm">{{ r.cobrado_cliente | moneda(r.moneda) }}</td>
+          <td class="money {% if r.saldo > 0 %}money-negative{% endif %}">
+            {{ r.saldo | moneda(r.moneda) }}
+          </td>
+          <td>
+            {% if r.estado == 'ACTIVO' %}
+              <span class="badge badge-green">ACTIVO</span>
+            {% elif r.estado == 'TERMINADO' %}
+              <span class="badge badge-blue">TERMINADO</span>
+            {% elif r.estado == 'CANCELADO' %}
+              <span class="badge badge-red">CANCELADO</span>
+            {% elif r.estado == 'INCOBRABLE' %}
+              <span class="badge" style="background:#6b21a8;color:#fff;">INCOBRABLE</span>
+            {% else %}
+              <span class="badge">{{ r.estado }}</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="/bitacora/{{ r.id_reserva }}" class="btn-ver">Ver →</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="10" style="text-align:center; padding:32px; color:var(--text2);">
+            Sin resultados para esta búsqueda.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if hay_mas or page > 1 %}
+    <div style="display:flex; align-items:center; justify-content:center; gap:12px; padding:16px 20px; border-top:1px solid var(--border);">
+      {% if page > 1 %}
+      <button class="btn btn-outline"
+              style="font-size:0.82rem;"
+              hx-get="/bitacora/rows"
+              hx-include="#filtros-bitacora"
+              hx-vals='{"page": {{ page - 1 }}}'
+              hx-target="#tabla-wrapper"
+              hx-swap="innerHTML">← Anterior</button>
+      {% endif %}
+      <span style="font-size:0.8rem; color:var(--text2);">
+        Página {{ page }} &nbsp;·&nbsp; {{ total }} reserva(s)
+      </span>
+      {% if hay_mas %}
+      <button class="btn btn-outline"
+              style="font-size:0.82rem;"
+              hx-get="/bitacora/rows"
+              hx-include="#filtros-bitacora"
+              hx-vals='{"page": {{ page + 1 }}}'
+              hx-target="#tabla-wrapper"
+              hx-swap="innerHTML">Siguiente →</button>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Actualizar URL del botón exportar con los filtros actuales -->
+<script>
+(function() {
+  function actualizarExportar() {
+    var q   = document.getElementById('f-q')?.value || '';
+    var est = document.getElementById('f-estado')?.value || 'TODOS';
+    var ord = document.getElementById('f-orden')?.value || 'auto';
+    var cre = document.getElementById('f-creacion')?.value || 'todos';
+    var btn = document.getElementById('btn-exportar');
+    if (btn) btn.href = '/bitacora/exportar?q=' + encodeURIComponent(q) +
+      '&estado=' + est + '&orden=' + ord + '&creacion=' + cre;
+  }
+  ['f-q','f-estado','f-orden','f-creacion'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', actualizarExportar);
+    if (el && el.tagName === 'INPUT') el.addEventListener('keyup', actualizarExportar);
+  });
+})();
+</script>
+
+{% endblock %}

@@ -1,0 +1,113 @@
+<div id="seccion-pasajeros">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">👥 Pasajeros ({{ pasajeros|length }})</div>
+  <div class="card-body" style="padding-bottom:0;">
+
+    {% if pasajeros %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Fecha de nacimiento</th>
+          <th>Parentesco</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in pasajeros %}
+        <tr>
+          <td>{{ p.nombre }}</td>
+          <td style="font-size:0.875rem;">{{ p.fecha_nacimiento or '—' }}</td>
+          <td style="font-size:0.875rem;">{{ p.parentesco or '—' }}</td>
+          <td>
+            <div style="display:flex; gap:6px; align-items:center;">
+              {% if p.nombre not in (nombres_frecuentes or []) %}
+              <form method="post" action="/bitacora/{{ id_reserva }}/pasajeros/{{ p.id_pasajero }}/guardar-frecuente"
+                    hx-post="/bitacora/{{ id_reserva }}/pasajeros/{{ p.id_pasajero }}/guardar-frecuente"
+                    hx-target="#seccion-pasajeros" hx-swap="outerHTML">
+                <button type="submit" class="btn btn-outline"
+                        style="font-size:0.7rem; padding:2px 8px; color:var(--primary);"
+                        title="Guardar en viajeros frecuentes del cliente">
+                  📌 Frecuente
+                </button>
+              </form>
+              {% else %}
+              <span style="font-size:0.7rem; color:var(--text2); padding:2px 6px;">⭐ Frecuente</span>
+              {% endif %}
+              <form method="post" action="/bitacora/{{ id_reserva }}/pasajeros/{{ p.id_pasajero }}/eliminar"
+                    hx-post="/bitacora/{{ id_reserva }}/pasajeros/{{ p.id_pasajero }}/eliminar"
+                    hx-target="#seccion-pasajeros" hx-swap="outerHTML"
+                    onsubmit="return confirm('¿Eliminar a {{ p.nombre }}?')">
+                <button type="submit" class="btn-icon-danger" title="Eliminar">✕</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); margin:0 0 16px; font-size:0.875rem;">Sin pasajeros registrados.</p>
+    {% endif %}
+
+    <!-- Viajeros frecuentes del cliente -->
+    {% if acompanantes %}
+    <div style="margin-bottom:14px; padding:12px 14px; background:rgba(0,113,204,0.05);
+                border:1px solid rgba(0,113,204,0.15); border-radius:8px;">
+      <p style="font-size:0.8rem; font-weight:600; color:var(--primary); margin:0 0 8px;">
+        ⚡ Agregar de la lista del cliente
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        {% for a in acompanantes %}
+        <form method="post" action="/bitacora/{{ id_reserva }}/pasajeros/agregar-frecuente/{{ a.id_acompanante }}"
+              hx-post="/bitacora/{{ id_reserva }}/pasajeros/agregar-frecuente/{{ a.id_acompanante }}"
+              hx-target="#seccion-pasajeros" hx-swap="outerHTML" style="display:inline;">
+          <button type="submit" class="btn btn-outline"
+                  style="font-size:0.78rem; padding:4px 12px; border-radius:20px;"
+                  title="{{ a.fecha_nacimiento or '' }}{% if a.parentesco %} · {{ a.parentesco }}{% endif %}">
+            + {{ a.nombre }}
+          </button>
+        </form>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Formulario para agregar manualmente -->
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:8px 0; font-size:0.875rem;">
+        + Agregar pasajero manualmente
+      </summary>
+      <form method="post" action="/bitacora/{{ id_reserva }}/pasajeros/agregar"
+            hx-post="/bitacora/{{ id_reserva }}/pasajeros/agregar"
+            hx-target="#seccion-pasajeros"
+            hx-swap="outerHTML"
+            style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Nombre completo *</label>
+            <input class="field-input" type="text" name="nombre" required placeholder="Nombre completo">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Fecha de nacimiento</label>
+            <input class="field-input" type="date" name="fecha_nacimiento">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Parentesco</label>
+            <input class="field-input" type="text" name="parentesco" placeholder="Ej: Titular, Esposa, Hijo...">
+          </div>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem;
+                       color:var(--text2); margin-top:10px; cursor:pointer;">
+          <input type="checkbox" name="guardar_frecuente" value="1">
+          Guardar también en la lista de viajeros frecuentes del cliente
+        </label>
+        <div style="margin-top:10px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">Agregar</button>
+        </div>
+      </form>
+    </details>
+
+  </div>
+</div>
+</div>

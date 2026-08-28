@@ -1,0 +1,846 @@
+{% extends "base.html" %}
+{% block title %}{{ titulo }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ accion }}" id="form-reserva">
+
+<!-- ── Header ── -->
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="{{ '/bitacora/' + reserva.id_reserva|string if reserva else '/bitacora' }}" class="btn btn-outline" style="font-size:0.8rem;">← Atrás</a>
+  <h1 class="page-title" style="margin:0;">{{ titulo }}</h1>
+  <button type="submit" class="btn btn-primary" style="margin-left:auto;">
+    💾 {{ 'Crear Itinerario' if not reserva else 'Guardar Cambios' }}
+  </button>
+</div>
+
+{% if error %}
+<div class="alert-error" style="margin-bottom:20px;">⚠️ {{ error }}</div>
+{% endif %}
+
+<!-- ── Cliente ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">👤 Cliente y Acompañantes</div>
+  <div class="card-body">
+    <div class="form-field" style="max-width:420px; margin-bottom:{% if not reserva %}20px{% else %}0{% endif %};">
+      <label class="field-label">Cliente *</label>
+      <select name="id_cliente" class="field-select" required
+        {% if not reserva %}
+          hx-get="/api/acompanantes-viaje"
+          hx-trigger="change"
+          hx-target="#seccion-acompanantes"
+        {% endif %}>
+        <option value="">Seleccionar cliente...</option>
+        {% for c in clientes %}
+        <option value="{{ c.id_cliente }}"
+          {% if (reserva and reserva.id_cliente == c.id_cliente) or (preselect_cliente and preselect_cliente == c.id_cliente) %}selected{% endif %}>
+          {{ c.nombre }} — {{ c.id_cliente }}
+        </option>
+        {% endfor %}
+      </select>
+      {% if not reserva %}<div id="preview-cliente"></div>{% endif %}
+    </div>
+
+    <!-- Acompañantes del viaje (solo en creación) -->
+    {% if not reserva %}
+    <div>
+      <label class="field-label" style="margin-bottom:8px; display:block;">
+        👥 Acompañantes para este viaje
+        <span style="font-weight:400; color:var(--text2);">— selecciona de los viajeros frecuentes del cliente</span>
+      </label>
+      <div id="seccion-acompanantes">
+        {% if acompanantes_iniciales %}
+          {% set acompanantes = acompanantes_iniciales %}
+          {% include "acompanantes_viaje_options.html" %}
+        {% else %}
+          <p style="color:var(--text2); font-size:0.83rem; margin:0; padding:4px 0;">
+            Selecciona un cliente para ver sus viajeros frecuentes.
+          </p>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not reserva %}
+<!-- ── Grupo de Viaje (opcional) ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🧳 Grupo de Viaje (opcional)</div>
+  <div class="card-body">
+    <div class="form-field" style="max-width:420px;">
+      <label class="field-label">Grupo</label>
+      <select name="id_grupo" id="sel-grupo" class="field-select"
+              hx-get="/api/grupos/prefill" hx-include="#sel-grupo" hx-trigger="change{% if preselect_grupo %}, load{% endif %}"
+              hx-target="#campos-grupo" hx-swap="innerHTML">
+        <option value="">— Ninguno (viaje individual) —</option>
+        {% for g in grupos_activos %}
+        <option value="{{ g.id_grupo }}" {% if preselect_grupo and preselect_grupo|string == g.id_grupo|string %}selected{% endif %}>
+          🧳 {{ g.nombre_grupo }} ({{ g.destino }}, sale {{ g.fecha_salida }})
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div id="campos-grupo"></div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Datos del viaje ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🗺️ Datos del viaje</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Destino *</label>
+        <input class="field-input" type="text" name="destino" list="dl_destinos" required
+               value="{{ reserva.destino if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Origen</label>
+        <input class="field-input" type="text" name="origen"
+               value="{{ reserva.origen if reserva else 'Monterrey' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha de salida *</label>
+        <input class="field-input" type="date" name="fecha_salida" required
+               value="{{ reserva.fecha_salida if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha de regreso *</label>
+        <input class="field-input" type="date" name="fecha_regreso" required
+               value="{{ reserva.fecha_regreso if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Límite de liquidación</label>
+        <input class="field-input" type="date" name="fecha_limite_liquidacion"
+               value="{{ reserva.fecha_limite_liquidacion if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Límite al proveedor</label>
+        <input class="field-input" type="date" name="fecha_limite_proveedor"
+               value="{{ reserva.fecha_limite_proveedor if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Moneda</label>
+        <select name="moneda" class="field-select">
+          <option value="MXN" {% if not reserva or reserva.moneda == 'MXN' %}selected{% endif %}>MXN — Pesos</option>
+          <option value="USD" {% if reserva and reserva.moneda == 'USD' %}selected{% endif %}>USD — Dólares</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toggle paquete global ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-body" style="padding:12px 20px;">
+    <label style="display:flex; align-items:center; gap:10px; cursor:pointer; font-size:0.9rem; font-weight:600;">
+      <input type="checkbox" id="chk-paquete" name="es_paquete_global" value="1"
+             {% if reserva and reserva.es_paquete_global %}checked{% endif %}
+             onchange="togglePaquete(this.checked)">
+      📦 Es paquete todo incluido (precio único sin desglose por concepto)
+    </label>
+  </div>
+</div>
+
+<!-- ── Cobros ── -->
+<div class="card" style="margin-bottom:16px;" id="card-cobros">
+  <div class="card-header">💰 Cobros al cliente</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Vuelos</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_vuelos" name="cobro_vuelos" data-calc="cobro"
+               value="{{ reserva.cobro_vuelos if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">TUA</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_tua" name="cobro_tua" data-calc="cobro"
+               value="{{ reserva.cobro_tua if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Hotel</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_hotel" name="cobro_hotel" data-calc="cobro"
+               value="{{ reserva.cobro_hotel if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Traslados</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_traslados" name="cobro_traslados" data-calc="cobro"
+               value="{{ reserva.cobro_traslados if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Tours</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_tours" name="cobro_tours" data-calc="cobro"
+               value="{{ reserva.cobro_tours if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Adicionales</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="cobro_adicionales" name="cobro_adicionales" data-calc="cobro"
+               value="{{ reserva.cobro_adicionales if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Especificar adicionales</label>
+        <input class="field-input" type="text" name="especificar_adicionales"
+               value="{{ reserva.especificar_adicionales if reserva else '' }}">
+      </div>
+    </div>
+    <div class="total-calc">
+      <span>Venta Total:</span>
+      <strong id="disp_venta" class="money money-positive">
+        ${{ "{:,.0f}".format(reserva.venta_total) if reserva else '0' }}
+      </strong>
+      <input type="hidden" id="venta_total" name="venta_total"
+             value="{{ reserva.venta_total if reserva else '0' }}">
+    </div>
+  </div>
+</div>
+
+<!-- ── Costos internos ── -->
+<div class="card" style="margin-bottom:16px;" id="card-costos">
+  <div class="card-header">🔒 Costos internos</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Costo vuelos</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_vuelos" name="costo_vuelos" data-calc="costo"
+               value="{{ reserva.costo_vuelos if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Costo TUA</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_tua" name="costo_tua" data-calc="costo"
+               value="{{ reserva.costo_tua if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Costo hotel</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_hotel" name="costo_hotel" data-calc="costo"
+               value="{{ reserva.costo_hotel if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Costo traslados</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_traslados" name="costo_traslados" data-calc="costo"
+               value="{{ reserva.costo_traslados if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Costo tours</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_tours" name="costo_tours" data-calc="costo"
+               value="{{ reserva.costo_tours if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Costo adicionales</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_adicionales" name="costo_adicionales" data-calc="costo"
+               value="{{ reserva.costo_adicionales if reserva else '0' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Comisiones</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0"
+               id="costo_comisiones" name="costo_comisiones" data-calc="costo"
+               value="{{ reserva.costo_comisiones if reserva else '0' }}">
+      </div>
+    </div>
+    <div class="total-calc" style="gap:24px;">
+      <span>Costo Total: <strong id="disp_costo" class="money">
+        ${{ "{:,.0f}".format(reserva.costo_total) if reserva else '0' }}
+      </strong></span>
+      <span>Utilidad: <strong id="disp_utilidad" class="money money-positive">
+        ${{ "{:,.0f}".format(reserva.utilidad_proyectada) if reserva else '0' }}
+      </strong></span>
+      <input type="hidden" id="costo_total" name="costo_total"
+             value="{{ reserva.costo_total if reserva else '0' }}">
+      <input type="hidden" id="utilidad_proyectada" name="utilidad_proyectada"
+             value="{{ reserva.utilidad_proyectada if reserva else '0' }}">
+    </div>
+  </div>
+</div>
+
+<!-- ── Proveedores ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🏨 Proveedores y Localizadores</div>
+  <div class="card-body">
+
+    <!-- Vuelo -->
+    <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+              color:var(--text2); margin:0 0 8px;">✈️ Vuelo</p>
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-field">
+        <label class="field-label">Aerolínea</label>
+        <input class="field-input" type="text" name="aerolinea" list="dl_aerolineas" id="f-aerolinea"
+               value="{{ reserva.aerolinea if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Localizador vuelo / PNR</label>
+        <input class="field-input" type="text" name="itinerario_vuelo_plataforma" id="f-loc-vuelo"
+               value="{{ reserva.itinerario_vuelo_plataforma if reserva else '' }}"
+               placeholder="Ej: ABC123">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Localizador global</label>
+        <input class="field-input" type="text" name="localizador_global" id="f-loc-mayorista"
+               value="{{ reserva.localizador_global if reserva else '' }}"
+               placeholder="Ej: mayorista/GDS locator">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Equipaje incluido</label>
+        <input class="field-input" type="text" name="detalle_equipaje" list="dl_equipaje"
+               value="{{ reserva.detalle_equipaje if reserva else '' }}"
+               placeholder="Escribe o selecciona el equipaje incluido">
+      </div>
+    </div>
+
+    <!-- Hotel -->
+    <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+              color:var(--text2); margin:0 0 8px;">🏨 Hotel</p>
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-field">
+        <label class="field-label">Mayorista / Operador</label>
+        <input class="field-input" type="text" name="mayorista" list="dl_mayoristas" id="f-mayorista"
+               value="{{ reserva.mayorista if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Nombre del hotel</label>
+        <input class="field-input" type="text" name="nombre_hotel" list="dl_hoteles" id="f-hotel"
+               value="{{ reserva.nombre_hotel if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Localizador hotel</label>
+        <input class="field-input" type="text" name="itinerario_hotel_plataforma" id="f-loc-hotel"
+               value="{{ reserva.itinerario_hotel_plataforma if reserva else '' }}"
+               placeholder="Ej: confirmación en plataforma">
+      </div>
+    </div>
+
+    <!-- Traslados -->
+    <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+              color:var(--text2); margin:0 0 8px;">🚐 Traslados</p>
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-field">
+        <label class="field-label">Proveedor traslados</label>
+        <input class="field-input" type="text" name="proveedor_traslados" list="dl_prov_traslados" id="f-prov-traslados"
+               value="{{ reserva.proveedor_traslados if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Confirmación traslados</label>
+        <input class="field-input" type="text" name="confirmacion_proveedor_traslados" id="f-conf-traslados"
+               value="{{ reserva.confirmacion_proveedor_traslados if reserva else '' }}">
+      </div>
+    </div>
+
+    <!-- Tours -->
+    <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+              color:var(--text2); margin:0 0 8px;">🗺️ Tours</p>
+    <div class="form-grid" style="margin-bottom:16px;">
+      <div class="form-field">
+        <label class="field-label">Proveedor tours</label>
+        <input class="field-input" type="text" name="proveedor_tours" list="dl_prov_tours" id="f-prov-tours"
+               value="{{ reserva.proveedor_tours if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Confirmación tours</label>
+        <input class="field-input" type="text" name="confirmacion_proveedor_tours" id="f-conf-tours"
+               value="{{ reserva.confirmacion_proveedor_tours if reserva else '' }}">
+      </div>
+    </div>
+
+    <!-- Adicionales -->
+    <p style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+              color:var(--text2); margin:0 0 8px;">➕ Adicionales</p>
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Proveedor adicionales</label>
+        <input class="field-input" type="text" name="proveedor_adicionales" list="dl_prov_adicionales"
+               value="{{ reserva.proveedor_adicionales if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Confirmación adicionales</label>
+        <input class="field-input" type="text" name="confirmacion_proveedor_adicionales"
+               value="{{ reserva.confirmacion_proveedor_adicionales if reserva else '' }}">
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Vuelos ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">✈️ Información de vuelos</div>
+  <div class="card-body">
+    <p style="font-size:0.8rem; color:var(--text2); margin:0 0 12px;">
+      Por defecto, la fecha de vuelo se toma igual a la fecha del viaje. Cámbiala solo si el vuelo es en diferente fecha.
+    </p>
+    <div id="fecha-error" style="display:none;" class="alerta-inline alerta-critica" style="margin-bottom:12px;"></div>
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Fecha vuelo ida</label>
+        <input class="field-input" type="date" name="fecha_vuelo_ida" id="fecha_vuelo_ida"
+               value="{{ reserva.fecha_vuelo_ida if reserva and reserva.fecha_vuelo_ida else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Hora vuelo ida</label>
+        <input class="field-input" type="time" name="hora_vuelo_ida"
+               value="{{ reserva.hora_vuelo_ida if reserva else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha vuelo vuelta</label>
+        <input class="field-input" type="date" name="fecha_vuelo_vuelta" id="fecha_vuelo_vuelta"
+               value="{{ reserva.fecha_vuelo_vuelta if reserva and reserva.fecha_vuelo_vuelta else '' }}">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Hora vuelo vuelta</label>
+        <input class="field-input" type="time" name="hora_vuelo_vuelta"
+               value="{{ reserva.hora_vuelo_vuelta if reserva else '' }}">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Habitaciones ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🛏️ Habitaciones</div>
+  <div class="card-body">
+    <div class="form-field" style="width:160px; margin-bottom:12px;">
+      <label class="field-label">Núm. de habitaciones</label>
+      <input class="field-input" type="number" id="hab-n" name="hab_n"
+             min="0" max="10" value="{{ habitaciones|length }}"
+             oninput="habGenerarFilas()">
+    </div>
+    <table style="width:100%;" id="hab-tabla">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th>
+          <th>Tipo de habitación</th>
+          <th style="width:100px;">Personas</th>
+          <th style="width:110px;">Check-in</th>
+          <th>Descripción (opcional)</th>
+        </tr>
+      </thead>
+      <tbody id="hab-filas"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Notas ── -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📝 Notas</div>
+  <div class="card-body">
+    <div class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Restricciones médicas</label>
+        <textarea class="field-input field-textarea" name="restricciones_medicas">{{ reserva.restricciones_medicas if reserva else '' }}</textarea>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Solicitudes especiales</label>
+        <textarea class="field-input field-textarea" name="solicitudes_especiales">{{ reserva.solicitudes_especiales if reserva else '' }}</textarea>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Comentarios operativos</label>
+        <textarea class="field-input field-textarea" name="comentarios_operativos">{{ reserva.comentarios_operativos if reserva else '' }}</textarea>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Notas abiertas</label>
+        <textarea class="field-input field-textarea" name="notas_abiertas">{{ reserva.notas_abiertas if reserva else '' }}</textarea>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if not reserva %}
+<div class="alerta-inline alerta-info" style="font-size:0.82rem; margin-bottom:16px;">
+  ℹ️ El <strong>checklist operativo</strong> y los acompañantes sin historial previo estarán disponibles en la siguiente pantalla.
+</div>
+{% endif %}
+
+{% if not reserva %}
+<!-- ── Plan de pagos inicial (solo en creación) ── -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">📅 Plan de pagos inicial <span style="font-weight:400; font-size:0.8rem; color:var(--text2);">(opcional — también puede generarse después)</span></div>
+  <div style="padding:16px 20px;">
+
+    <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
+      <div class="form-field" style="width:170px;">
+        <label class="field-label">Frecuencia</label>
+        <select class="field-select" id="np-preset"
+                onchange="npPresetChange()">
+          <option value="personalizado">✏️ Personalizado</option>
+          <option value="semanal">📅 Semanal (7 días)</option>
+          <option value="quincenal">📅 Quincenal (15 días)</option>
+          <option value="mensual">📅 Mensual</option>
+        </select>
+      </div>
+      <div class="form-field" id="np-wrap-desde" style="width:170px; display:none;">
+        <label class="field-label">Primera fecha</label>
+        <input class="field-input" type="date" id="np-desde">
+      </div>
+      <div class="form-field" style="width:120px;">
+        <label class="field-label">Núm. de pagos</label>
+        <input class="field-input" type="number" id="np-n"
+               name="plan_n_pagos" min="0" max="24" value="0"
+               oninput="npGenerarFilas()">
+      </div>
+      <button type="button" class="btn btn-outline" id="np-btn-autogen"
+              style="font-size:0.8rem; padding:7px 14px; display:none;"
+              onclick="npAutoGenerar()">
+        📅 Auto-generar
+      </button>
+      <button type="button" class="btn btn-outline"
+              style="font-size:0.8rem; padding:7px 14px;"
+              onclick="npDistribuirIgual()">
+        ⚖️ Distribuir igual
+      </button>
+    </div>
+
+    <table style="width:100%; margin-bottom:12px;" id="np-tabla" style="display:none;">
+      <thead>
+        <tr>
+          <th style="width:36px;">#</th>
+          <th>Fecha exacta de pago</th>
+          <th>Monto</th>
+        </tr>
+      </thead>
+      <tbody id="np-filas"></tbody>
+    </table>
+
+    <div id="np-validacion"
+         style="margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; display:none;">
+    </div>
+
+  </div>
+</div>
+{% endif %}
+
+{% if not reserva %}
+<!-- ── Anticipo inicial (solo en creación) ── -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">💵 Anticipo inicial <span style="font-weight:400; font-size:0.8rem; color:var(--text2);">(opcional — puede registrarse después)</span></div>
+  <div class="card-body">
+    <div class="form-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px,1fr));">
+      <div class="form-field">
+        <label class="field-label">Monto anticipo</label>
+        <input class="field-input field-money" type="number" name="anticipo_monto"
+               id="anticipo_monto" min="0" step="0.01" value="0"
+               placeholder="0.00">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Método de pago</label>
+        <select name="anticipo_metodo" class="field-select" id="anticipo_metodo"
+                onchange="toggleComisionAnticipo(this.value)">
+          <option value="Transferencia">Transferencia</option>
+          <option value="Efectivo">Efectivo</option>
+          <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
+        </select>
+      </div>
+      <div class="form-field" id="wrap-com-anticipo" style="display:none;">
+        <label class="field-label">% Comisión tarjeta</label>
+        <input class="field-input" type="number" name="anticipo_comision_pct"
+               min="0" max="10" step="0.1" value="3.5">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha de pago</label>
+        <input class="field-input" type="date" name="anticipo_fecha"
+               value="{{ today }}">
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Submit ── -->
+<div style="display:flex; gap:12px; margin-bottom:40px;">
+  <button type="submit" class="btn btn-primary">
+    💾 {{ 'Crear Itinerario' if not reserva else 'Guardar Cambios' }}
+  </button>
+  <a href="{{ '/bitacora/' + reserva.id_reserva|string if reserva else '/bitacora' }}"
+     class="btn btn-outline">Cancelar</a>
+</div>
+
+</form>
+
+<!-- Catálogos para autocompletar (hoteles/aerolíneas/mayoristas/proveedores) -->
+<datalist id="dl_destinos">{% for d in catalogo_destinos %}<option value="{{ d }}">{% endfor %}</datalist>
+<datalist id="dl_hoteles">{% for h in catalogo_hoteles %}<option value="{{ h }}">{% endfor %}</datalist>
+<datalist id="dl_aerolineas">{% for a in catalogo_aerolineas %}<option value="{{ a }}">{% endfor %}</datalist>
+<datalist id="dl_mayoristas">{% for m in catalogo_mayoristas %}<option value="{{ m }}">{% endfor %}</datalist>
+<datalist id="dl_prov_traslados">{% for p in catalogo_prov_traslados %}<option value="{{ p }}">{% endfor %}</datalist>
+<datalist id="dl_prov_tours">{% for p in catalogo_prov_tours %}<option value="{{ p }}">{% endfor %}</datalist>
+<datalist id="dl_prov_adicionales">{% for p in catalogo_prov_adicionales %}<option value="{{ p }}">{% endfor %}</datalist>
+<datalist id="dl_equipaje">{% for e in catalogo_equipaje %}<option value="{{ e }}">{% endfor %}</datalist>
+
+<!-- ── Pasajeros (solo en edición) ── -->
+{% if reserva %}
+<div id="seccion-pasajeros">
+  {% include "pasajeros_section.html" %}
+</div>
+{% endif %}
+
+<script>
+function recalcular() {
+  const cobros = ['cobro_vuelos','cobro_tua','cobro_hotel','cobro_traslados','cobro_tours','cobro_adicionales']
+    .reduce((s, id) => s + (parseFloat(document.getElementById(id)?.value) || 0), 0);
+  const costos = ['costo_vuelos','costo_tua','costo_hotel','costo_traslados','costo_tours','costo_adicionales','costo_comisiones']
+    .reduce((s, id) => s + (parseFloat(document.getElementById(id)?.value) || 0), 0);
+  const utilidad = cobros - costos;
+  const fmt = n => '$' + n.toLocaleString('es-MX', {minimumFractionDigits: 0, maximumFractionDigits: 0});
+  document.getElementById('venta_total').value = cobros.toFixed(2);
+  document.getElementById('costo_total').value = costos.toFixed(2);
+  document.getElementById('utilidad_proyectada').value = utilidad.toFixed(2);
+  document.getElementById('disp_venta').textContent    = fmt(cobros);
+  document.getElementById('disp_costo').textContent    = fmt(costos);
+  document.getElementById('disp_utilidad').textContent = fmt(utilidad);
+  document.getElementById('disp_utilidad').style.color = utilidad >= 0 ? 'var(--primary)' : 'var(--danger)';
+}
+document.querySelectorAll('[data-calc]').forEach(el => el.addEventListener('input', recalcular));
+// Delegado en el form: sigue funcionando aunque el prefill de grupo reemplace estos
+// inputs por OOB swap (los nodos originales con su listener directo se pierden).
+document.getElementById('form-reserva')?.addEventListener('input', function(ev) {
+  if (ev.target && ev.target.matches('[data-calc]')) recalcular();
+});
+
+// Sincronización fechas de vuelo ↔ fechas de viaje
+(function() {
+  const fSalida    = document.querySelector('input[name=fecha_salida]');
+  const fRegreso   = document.querySelector('input[name=fecha_regreso]');
+  const fVueloIda  = document.getElementById('fecha_vuelo_ida');
+  const fVueloVta  = document.getElementById('fecha_vuelo_vuelta');
+  const fLimProv   = document.querySelector('input[name=fecha_limite_proveedor]');
+  const fLimLiq    = document.querySelector('input[name=fecha_limite_liquidacion]');
+  const errDiv     = document.getElementById('fecha-error');
+  const form       = document.getElementById('form-reserva');
+
+  let prevSalida  = fSalida?.value  || '';
+  let prevRegreso = fRegreso?.value || '';
+
+  function validarFechas() {
+    const sal = fSalida?.value;
+    const reg = fRegreso?.value;
+    const lim = fLimProv?.value;
+    const liq = fLimLiq?.value;
+    const msgs = [];
+    if (sal && reg && reg < sal) msgs.push('⚠️ La fecha de regreso no puede ser anterior a la fecha de salida.');
+    if (sal && lim && lim > sal) msgs.push('⚠️ El límite al proveedor debe ser igual o anterior a la fecha de salida.');
+    if (lim && liq && liq > lim) msgs.push('⚠️ El límite de liquidación del cliente debe ser igual o anterior al límite del proveedor.');
+    if (errDiv) {
+      errDiv.style.display = msgs.length ? 'block' : 'none';
+      errDiv.innerHTML = msgs.join('<br>');
+    }
+    return msgs.length === 0;
+  }
+
+  fSalida?.addEventListener('change', function() {
+    if (!fVueloIda.value || fVueloIda.value === prevSalida) {
+      fVueloIda.value = this.value;
+    }
+    prevSalida = this.value;
+    validarFechas();
+  });
+
+  fRegreso?.addEventListener('change', function() {
+    if (!fVueloVta.value || fVueloVta.value === prevRegreso) {
+      fVueloVta.value = this.value;
+    }
+    prevRegreso = this.value;
+    validarFechas();
+  });
+
+  fLimProv?.addEventListener('change', validarFechas);
+  fLimLiq?.addEventListener('change', validarFechas);
+
+  form?.addEventListener('submit', function(e) {
+    if (!validarFechas()) e.preventDefault();
+  });
+})();
+
+// ── Plan de pagos inicial (solo creación) ──────────────────────────────────
+(function() {
+  if (!document.getElementById('np-filas')) return;
+
+  function npGetSaldo() {
+    return parseFloat(document.getElementById('venta_total')?.value) || 0;
+  }
+
+  const fmtMx = n => '$' + parseFloat(n).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+  // Reparte `total` en `n` partes de 2 decimales cuya suma da exactamente `total`
+  // (la primera absorbe el residuo) — mismo criterio que distribuir_equitativo() en Python.
+  function npDistribuirEquitativo(total, n) {
+    const base = Math.round((total / n) * 100) / 100;
+    const residuo = Math.round((total - base * n) * 100) / 100;
+    return Array.from({length: n}, (_, i) => (base + (i === 0 ? residuo : 0)).toFixed(2));
+  }
+
+  function npValidar() {
+    const saldo  = npGetSaldo();
+    const montos = Array.from(document.querySelectorAll('#np-filas input[type=number]'));
+    const suma   = montos.reduce((s, el) => s + (parseFloat(el.value) || 0), 0);
+    const div    = document.getElementById('np-validacion');
+    if (montos.length === 0) { div.style.display = 'none'; return; }
+    const diff = Math.abs(suma - saldo);
+    div.style.display = 'block';
+    if (diff < 0.05) {
+      div.style.cssText = 'display:block; margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; background:rgba(39,174,96,0.10); border:1px solid var(--primary); color:var(--primary)';
+      div.innerHTML = `✅ Plan cuadrado. Suma: <strong>${fmtMx(suma)}</strong>`;
+    } else if (suma > saldo + 0.05) {
+      div.style.cssText = 'display:block; margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; background:rgba(229,62,62,0.08); border:1px solid var(--danger); color:var(--danger)';
+      div.innerHTML = `🛑 Excede la venta total. Suma: <strong>${fmtMx(suma)}</strong> / Venta: <strong>${fmtMx(saldo)}</strong>`;
+    } else {
+      div.style.cssText = 'display:block; margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; background:rgba(217,119,6,0.08); border:1px solid var(--warning); color:var(--warning)';
+      div.innerHTML = `⚠️ Faltan ${fmtMx(saldo - suma)} por incluir en el plan`;
+    }
+  }
+
+  function npGenerarFilas() {
+    const n = parseInt(document.getElementById('np-n').value) || 0;
+    const tbody = document.getElementById('np-filas');
+    const tabla = document.getElementById('np-tabla');
+    tbody.innerHTML = '';
+    tabla.style.display = n > 0 ? '' : 'none';
+    for (let i = 1; i <= n; i++) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="date" name="plan_fecha_${i}" required
+                   style="width:100%; max-width:180px;"></td>
+        <td><input class="field-input field-money" type="number" name="plan_monto_${i}"
+                   min="0.01" step="0.01" required placeholder="0.00"
+                   style="width:100%; max-width:160px;"
+                   oninput="document.dispatchEvent(new Event('npValidar'))"></td>`;
+      tbody.appendChild(tr);
+    }
+    npValidar();
+  }
+
+  document.addEventListener('npValidar', npValidar);
+
+  function npDistribuirIgual() {
+    const n     = parseInt(document.getElementById('np-n').value) || 0;
+    const saldo = npGetSaldo();
+    if (n === 0) return;
+    npGenerarFilas();
+    const montos = npDistribuirEquitativo(saldo, n);
+    document.querySelectorAll('#np-filas input[type=number]').forEach((el, i) => { el.value = montos[i]; });
+    npValidar();
+  }
+
+  function npPresetChange() {
+    const preset  = document.getElementById('np-preset').value;
+    const mostrar = preset !== 'personalizado';
+    document.getElementById('np-wrap-desde').style.display  = mostrar ? '' : 'none';
+    document.getElementById('np-btn-autogen').style.display = mostrar ? '' : 'none';
+  }
+
+  function npAutoGenerar() {
+    const preset = document.getElementById('np-preset').value;
+    const desde  = document.getElementById('np-desde').value;
+    if (!desde) { alert('Selecciona la primera fecha.'); return; }
+    const n     = parseInt(document.getElementById('np-n').value) || 0;
+    const saldo = npGetSaldo();
+    if (n === 0) return;
+    npGenerarFilas();
+    const [y0, m0, d0] = desde.split('-').map(Number);
+    document.querySelectorAll('#np-filas input[type=date]').forEach((inp, i) => {
+      const dt = new Date(y0, m0 - 1, d0);
+      if (preset === 'semanal')        dt.setDate(dt.getDate() + i * 7);
+      else if (preset === 'quincenal') dt.setDate(dt.getDate() + i * 15);
+      else if (preset === 'mensual')   dt.setMonth(dt.getMonth() + i);
+      const yy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      inp.value = `${yy}-${mm}-${dd}`;
+    });
+    const montos = npDistribuirEquitativo(saldo, n);
+    document.querySelectorAll('#np-filas input[type=number]').forEach((el, i) => { el.value = montos[i]; });
+    npValidar();
+  }
+
+  window.npGenerarFilas   = npGenerarFilas;
+  window.npDistribuirIgual = npDistribuirIgual;
+  window.npPresetChange   = npPresetChange;
+  window.npAutoGenerar    = npAutoGenerar;
+})();
+
+(function() {
+  if (!document.getElementById('hab-filas')) return;
+
+  const habIniciales = [
+    {% for h in habitaciones %}
+    {tipo: {{ h.tipo_habitacion|tojson }}, personas: {{ h.num_personas }}, checkin: {{ (h.hora_checkin or '15:00')|tojson }}, descripcion: {{ (h.descripcion or '')|tojson }}},
+    {% endfor %}
+  ];
+
+  function habGenerarFilas() {
+    const n = parseInt(document.getElementById('hab-n').value) || 0;
+    const tbody = document.getElementById('hab-filas');
+    tbody.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const ini = habIniciales[i - 1] || {tipo: '', personas: 2, checkin: '15:00', descripcion: ''};
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="text" name="hab_tipo_${i}" required
+                   value="${ini.tipo.replace(/"/g, '&quot;')}" placeholder="Ej. Junior Suite"></td>
+        <td><input class="field-input" type="number" name="hab_personas_${i}" min="1" value="${ini.personas}"></td>
+        <td><input class="field-input" type="text" name="hab_checkin_${i}" value="${ini.checkin.replace(/"/g, '&quot;')}"></td>
+        <td><input class="field-input" type="text" name="hab_descripcion_${i}"
+                   value="${ini.descripcion.replace(/"/g, '&quot;')}" placeholder="Ej. Vista al mar"></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  window.habGenerarFilas = habGenerarFilas;
+  habGenerarFilas();
+})();
+
+function togglePaquete(isPaquete) {
+  const cardCobros = document.getElementById('card-cobros');
+  const cardCostos = document.getElementById('card-costos');
+  if (isPaquete) {
+    cardCobros.querySelector('.card-header').textContent = '📦 Precio del paquete (Todo Incluido)';
+    // Ocultar campos individuales excepto cobro_vuelos (precio total del paquete)
+    cardCobros.querySelectorAll('.form-field').forEach((f, i) => {
+      if (i === 0) {
+        f.querySelector('label').textContent = 'Precio total del paquete *';
+      } else {
+        f.style.display = 'none';
+        const inp = f.querySelector('input');
+        if (inp) inp.value = '0';
+      }
+    });
+    // Ocultar grilla de costos individuales, mostrar solo costo total
+    cardCostos.querySelectorAll('.form-field').forEach((f, i) => {
+      f.style.display = i === 0 ? '' : 'none';
+      if (i !== 0) { const inp = f.querySelector('input'); if (inp) inp.value = '0'; }
+      if (i === 0) f.querySelector('label').textContent = 'Costo total del paquete';
+    });
+  } else {
+    cardCobros.querySelector('.card-header').textContent = '💰 Cobros al cliente';
+    cardCobros.querySelectorAll('.form-field').forEach(f => {
+      f.style.display = '';
+      const lbl = f.querySelector('label');
+      // Restaurar labels originales al desactivar (el primer campo es Vuelos)
+    });
+    cardCostos.querySelectorAll('.form-field').forEach(f => { f.style.display = ''; });
+  }
+  recalcular();
+}
+
+function toggleComisionAnticipo(val) {
+  const w = document.getElementById('wrap-com-anticipo');
+  if (w) w.style.display = val === 'Tarjeta de Crédito/Débito' ? '' : 'none';
+}
+
+// Inicializar estado de paquete al cargar
+(function() {
+  const chk = document.getElementById('chk-paquete');
+  if (chk && chk.checked) togglePaquete(true);
+})();
+</script>
+{% endblock %}

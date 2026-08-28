@@ -1,0 +1,22 @@
+{% for m in mensajes %}
+{% set dir = m.direccion | lower %}
+<div class="wa-msg {{ dir }}">
+  <div class="wa-bubble">{{ m.contenido }}</div>
+  <div class="wa-msg-meta">
+    {% if dir == 'saliente' %}
+      <span>{{ m.usuario_envio or '' }}</span>
+    {% endif %}
+    <span>{{ m.timestamp[-8:-3] if m.timestamp and m.timestamp|length > 8 else (m.timestamp or '') }}</span>
+    {% if dir == 'saliente' %}
+      {% set st = m.estado or 'enviado' %}
+      <span class="wa-msg-status {{ st }}">
+        {% if st == 'leido' %}✓✓{% elif st == 'entregado' %}✓✓{% else %}✓{% endif %}
+      </span>
+    {% endif %}
+  </div>
+</div>
+{% else %}
+<p style="text-align:center; color:#bbb; font-size:0.82rem; margin-top:32px;">
+  Sin mensajes aún
+</p>
+{% endfor %}

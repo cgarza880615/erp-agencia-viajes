@@ -1,0 +1,22 @@
+<div id="seccion-checklist">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🛠️ Check-list Operativo</div>
+  <div class="card-body">
+    <form method="post" action="/bitacora/{{ id_reserva }}/checklist"
+          hx-post="/bitacora/{{ id_reserva }}/checklist"
+          hx-target="#seccion-checklist" hx-swap="outerHTML"
+          hx-trigger="change">
+      <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+        <label class="check-label {% if reserva.checkin_ida %}check-ok{% endif %}">
+          <input type="checkbox" name="checkin_ida" {% if reserva.checkin_ida %}checked{% endif %}>
+          🛫 Check-in Ida
+        </label>
+        <label class="check-label {% if reserva.checkin_regreso %}check-ok{% endif %}">
+          <input type="checkbox" name="checkin_regreso" {% if reserva.checkin_regreso %}checked{% endif %}>
+          🛬 Check-in Regreso
+        </label>
+      </div>
+    </form>
+  </div>
+</div>
+</div>

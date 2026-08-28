@@ -1,0 +1,291 @@
+<div id="seccion-plan-pagos">
+<div class="card" style="margin-bottom:16px;">
+
+  <!-- Header con totales -->
+  <div class="card-header" style="justify-content:space-between; flex-wrap:wrap; gap:8px;">
+    <span>📅 Plan de pagos</span>
+    <span style="font-size:0.8rem; font-weight:400; color:var(--text2);">
+      Cobrado: <strong class="money-positive">{{ saldo.cobrado_activos | moneda(reserva.moneda) }}</strong>
+      &nbsp;·&nbsp;
+      Pendiente: <strong class="{% if saldo.saldo_pendiente > 0 %}money-negative{% else %}money-positive{% endif %}">
+        {{ saldo.saldo_pendiente | moneda(reserva.moneda) }}
+      </strong>
+    </span>
+  </div>
+
+  {% if candado_dif %}
+  <div style="background:rgba(231,76,60,0.1);border-left:5px solid #e74c3c;border-radius:8px;padding:12px 16px;margin:8px 0;font-size:0.82rem;">
+    <b style="color:#c0392b;">⚠️ El plan de pagos no cuadra con la venta total.</b><br>
+    Anticipo ({{ candado_dif.anticipo | moneda(reserva.moneda) }}) + Plan ({{ candado_dif.plan_total | moneda(reserva.moneda) }})
+    = {{ (candado_dif.anticipo + candado_dif.plan_total) | moneda(reserva.moneda) }}, pero la venta es {{ candado_dif.venta | moneda(reserva.moneda) }}
+    — {{ candado_dif.signo }} {{ candado_dif.dif | moneda(reserva.moneda) }}.<br>
+    <span style="color:#c0392b;font-weight:600;">Revisa con Carlos antes de seguir cobrando parcialidades.</span>
+  </div>
+  {% endif %}
+
+  <!-- Tabla del plan existente -->
+  {% if plan_pagos %}
+  <table>
+    <thead>
+      <tr>
+        <th>Parcialidad</th>
+        <th>Esperado</th>
+        <th>Pagado</th>
+        <th>Restante</th>
+        <th>Fecha límite</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in plan_pagos %}
+      <tr>
+        <td>Parcialidad #{{ p.numero_pago }}</td>
+        <td class="money">{{ p.monto_esperado | moneda(reserva.moneda) }}</td>
+        <td class="money">{{ p.monto_pagado | moneda(reserva.moneda) }}</td>
+        <td class="money">{{ (p.monto_esperado - p.monto_pagado) | moneda(reserva.moneda) }}</td>
+        <td {% if p.estado in ('PENDIENTE', 'PARCIAL') and p.fecha_programada < today %}style="color:var(--danger);"{% endif %}>
+          {{ p.fecha_programada }}
+          {% if p.estado in ('PENDIENTE', 'PARCIAL') and p.fecha_programada < today %}
+            <span style="font-size:0.72rem; margin-left:4px;">⚠️ vencida</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if p.estado == 'PAGADO' %}
+            <span class="badge badge-green">PAGADO</span>
+          {% elif p.estado == 'PARCIAL' %}
+            <span class="badge badge-yellow">PARCIAL</span>
+          {% else %}
+            <span class="badge badge-yellow">PENDIENTE</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="padding:20px; color:var(--text2); font-size:0.875rem;">
+    Sin plan de pagos. Genera uno abajo.
+  </div>
+  {% endif %}
+
+  <!-- Generar / reprogramar -->
+  <div style="padding:16px 20px; border-top:1px solid var(--border);">
+    <details {% if not plan_pagos %}open{% endif %}>
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:4px 0; font-size:0.875rem;">
+        {% if plan_pagos %}🔄 Reprogramar parcialidades pendientes{% else %}+ Generar plan de pagos{% endif %}
+      </summary>
+
+      <div style="margin-top:14px;">
+
+        <!-- Selector de frecuencia (preset) -->
+        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px;">
+          <div class="form-field" style="width:170px;">
+            <label class="field-label">Frecuencia</label>
+            <select class="field-select" id="pp-preset-{{ reserva.id_reserva }}"
+                    onchange="ppPresetChange({{ reserva.id_reserva }})">
+              <option value="personalizado">✏️ Personalizado</option>
+              <option value="semanal">📅 Semanal (7 días)</option>
+              <option value="quincenal">📅 Quincenal (15 días)</option>
+              <option value="mensual">📅 Mensual</option>
+            </select>
+          </div>
+          <div class="form-field" id="pp-wrap-desde-{{ reserva.id_reserva }}" style="width:170px; display:none;">
+            <label class="field-label">Primera fecha</label>
+            <input class="field-input" type="date" id="pp-desde-{{ reserva.id_reserva }}">
+          </div>
+          <button type="button" class="btn btn-outline" id="pp-btn-autogen-{{ reserva.id_reserva }}"
+                  style="font-size:0.8rem; padding:7px 14px; display:none;"
+                  onclick="ppAutoGenerar({{ reserva.id_reserva }})">
+            📅 Auto-generar fechas y montos
+          </button>
+        </div>
+
+        <!-- Controles manuales -->
+        <div style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;">
+          <div class="form-field" style="width:120px;">
+            <label class="field-label">Núm. de pagos</label>
+            <input class="field-input" type="number" id="pp-n-{{ reserva.id_reserva }}"
+                   min="1" max="24" value="1"
+                   oninput="ppGenerarFilas({{ reserva.id_reserva }}, {{ saldo.saldo_pendiente }})">
+          </div>
+          <button type="button" class="btn btn-outline"
+                  style="font-size:0.8rem; padding:7px 14px;"
+                  onclick="ppDistribuirIgual({{ reserva.id_reserva }}, {{ saldo.saldo_pendiente }})">
+            ⚖️ Distribuir igual
+          </button>
+          <span style="font-size:0.78rem; color:var(--text2); align-self:center;">
+            Saldo a repartir: <strong>{{ saldo.saldo_pendiente | moneda(reserva.moneda) }}</strong>
+          </span>
+        </div>
+
+        <form method="post"
+              action="/bitacora/{{ reserva.id_reserva }}/plan-pagos/generar"
+              hx-post="/bitacora/{{ reserva.id_reserva }}/plan-pagos/generar"
+              hx-target="#seccion-plan-pagos" hx-swap="outerHTML"
+              id="form-plan-{{ reserva.id_reserva }}">
+
+          <input type="hidden" name="n_pagos" id="pp-hidden-n-{{ reserva.id_reserva }}" value="1">
+
+          <!-- Tabla de filas dinámicas -->
+          <table style="width:100%; margin-bottom:12px;">
+            <thead>
+              <tr>
+                <th style="width:36px;">#</th>
+                <th>Fecha exacta de pago</th>
+                <th>Monto ({{ reserva.moneda }})</th>
+              </tr>
+            </thead>
+            <tbody id="pp-filas-{{ reserva.id_reserva }}">
+              <!-- Generado por JS -->
+            </tbody>
+          </table>
+
+          <!-- ── Validación en vivo ── -->
+          <div id="pp-validacion-{{ reserva.id_reserva }}"
+               style="margin-bottom:12px; padding:10px 14px; border-radius:8px; font-size:0.85rem; display:none;">
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem; padding:8px 18px;"
+                  id="pp-btn-{{ reserva.id_reserva }}">
+            {% if plan_pagos %}🔄 Reprogramar plan{% else %}✅ Generar plan{% endif %}
+          </button>
+        </form>
+      </div>
+    </details>
+  </div>
+
+</div>
+</div>
+
+<script>
+(function() {
+  const rid       = {{ reserva.id_reserva }};
+  const SALDO     = {{ saldo.saldo_pendiente }};
+  const MONEDA    = "{{ reserva.moneda }}";
+  const fmt = n => '$' + parseFloat(n).toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' ' + MONEDA;
+  // Reparte `total` en `n` partes de 2 decimales cuya suma da exactamente `total`
+  // (la primera absorbe el residuo) — evita que dividir sin corrección deje la
+  // suma corta/pasada por un centavo. Mismo criterio que distribuir_equitativo() en Python.
+  function distribuirEquitativo(total, n) {
+    const base = Math.round((total / n) * 100) / 100;
+    const residuo = Math.round((total - base * n) * 100) / 100;
+    return Array.from({length: n}, (_, i) => (base + (i === 0 ? residuo : 0)).toFixed(2));
+  }
+
+  function ppValidar(id) {
+    const montos = Array.from(document.querySelectorAll('#pp-filas-' + id + ' input[type=number]'));
+    const suma   = montos.reduce((s, el) => s + (parseFloat(el.value) || 0), 0);
+    const diff   = Math.abs(suma - SALDO);
+    const div    = document.getElementById('pp-validacion-' + id);
+    const btn    = document.getElementById('pp-btn-' + id);
+
+    if (montos.length === 0) { div.style.display = 'none'; return; }
+
+    div.style.display = 'block';
+
+    if (diff < 0.05) {
+      div.style.background = 'rgba(39,174,96,0.10)';
+      div.style.border     = '1px solid var(--primary)';
+      div.style.color      = 'var(--primary)';
+      div.innerHTML = `✅ <strong>Plan cuadrado.</strong> Suma del plan: <strong>${fmt(suma)}</strong> = saldo pendiente.`;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    } else if (suma > SALDO + 0.05) {
+      div.style.background = 'rgba(229,62,62,0.08)';
+      div.style.border     = '1px solid var(--danger)';
+      div.style.color      = 'var(--danger)';
+      div.innerHTML = `🛑 <strong>Excede el saldo.</strong> Suma del plan: <strong>${fmt(suma)}</strong> — el saldo pendiente es <strong>${fmt(SALDO)}</strong>. Diferencia: <strong>+${fmt(diff)}</strong>.`;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    } else {
+      div.style.background = 'rgba(217,119,6,0.08)';
+      div.style.border     = '1px solid var(--warning)';
+      div.style.color      = 'var(--warning)';
+      div.innerHTML = `⚠️ <strong>Falta diferir ${fmt(diff)}.</strong> Suma del plan: <strong>${fmt(suma)}</strong> — quedan <strong>${fmt(SALDO - suma)}</strong> sin incluir en el plan.`;
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+
+  function ppGenerarFilas(id, saldoPendiente) {
+    const n = parseInt(document.getElementById('pp-n-' + id).value) || 1;
+    document.getElementById('pp-hidden-n-' + id).value = n;
+    const tbody = document.getElementById('pp-filas-' + id);
+    const filasPrev = tbody.querySelectorAll('tr');
+    const prevFechas = [], prevMontos = [];
+    filasPrev.forEach((tr, i) => {
+      prevFechas[i] = tr.querySelector('input[type=date]')?.value || '';
+      prevMontos[i] = tr.querySelector('input[type=number]')?.value || '';
+    });
+    tbody.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="date" name="fecha_${i}" required
+                   value="${prevFechas[i-1] || ''}"
+                   style="width:100%; max-width:180px;"></td>
+        <td><input class="field-input field-money" type="number" name="monto_${i}"
+                   min="0.01" step="0.01" required
+                   value="${prevMontos[i-1] || ''}"
+                   style="width:100%; max-width:160px;" placeholder="0.00"
+                   oninput="ppValidar(${id})"></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    ppValidar(id);
+  }
+
+  function ppDistribuirIgual(id, saldoPendiente) {
+    const n = parseInt(document.getElementById('pp-n-' + id).value) || 1;
+    ppGenerarFilas(id, saldoPendiente);
+    const montos = distribuirEquitativo(saldoPendiente, n);
+    document.querySelectorAll('#pp-filas-' + id + ' input[type=number]').forEach((el, i) => {
+      el.value = montos[i];
+    });
+    ppValidar(id);
+  }
+
+  function ppPresetChange(id) {
+    const preset  = document.getElementById('pp-preset-' + id).value;
+    const mostrar = preset !== 'personalizado';
+    document.getElementById('pp-wrap-desde-' + id).style.display  = mostrar ? '' : 'none';
+    document.getElementById('pp-btn-autogen-' + id).style.display = mostrar ? '' : 'none';
+  }
+
+  function ppAutoGenerar(id) {
+    const preset = document.getElementById('pp-preset-' + id).value;
+    const desde  = document.getElementById('pp-desde-' + id).value;
+    if (!desde) { alert('Selecciona la primera fecha.'); return; }
+    const n = parseInt(document.getElementById('pp-n-' + id).value) || 1;
+
+    ppGenerarFilas(id, SALDO);
+
+    const [y0, m0, d0] = desde.split('-').map(Number);
+    document.querySelectorAll('#pp-filas-' + id + ' input[type=date]').forEach((inp, i) => {
+      const dt = new Date(y0, m0 - 1, d0);
+      if (preset === 'semanal')    dt.setDate(dt.getDate() + i * 7);
+      else if (preset === 'quincenal') dt.setDate(dt.getDate() + i * 15);
+      else if (preset === 'mensual')   dt.setMonth(dt.getMonth() + i);
+      const yy = dt.getFullYear();
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      inp.value = `${yy}-${mm}-${dd}`;
+    });
+
+    const montos = distribuirEquitativo(SALDO, n);
+    document.querySelectorAll('#pp-filas-' + id + ' input[type=number]').forEach((el, i) => {
+      el.value = montos[i];
+    });
+    ppValidar(id);
+  }
+
+  window.ppGenerarFilas    = ppGenerarFilas;
+  window.ppDistribuirIgual = ppDistribuirIgual;
+  window.ppValidar         = ppValidar;
+  window.ppPresetChange    = ppPresetChange;
+  window.ppAutoGenerar     = ppAutoGenerar;
+
+  ppGenerarFilas(rid, SALDO);
+})();
+</script>

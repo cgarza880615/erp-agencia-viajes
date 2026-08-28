@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+{% block title %}Alertas — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🔔 Centro de Alertas</h1>
+<p class="page-subtitle">Situaciones que requieren atención inmediata o seguimiento</p>
+
+{% macro seccion(titulo, color_borde, color_fondo, items, vacio_msg) %}
+<div style="margin-bottom:24px;">
+  <h3 style="font-size:0.85rem; font-weight:700; text-transform:uppercase; letter-spacing:0.6px;
+             color:{{ color_borde }}; margin-bottom:12px;">{{ titulo }} ({{ items|length }})</h3>
+  {% if items %}
+  {% for a in items %}
+  {% if a.escalado %}
+  <div style="display:flex; align-items:flex-start; gap:12px; padding:12px 16px; margin-bottom:8px;
+              background:rgba(146,43,33,0.15); border:1px solid rgba(146,43,33,0.5);
+              border-left:4px solid #641e16; border-radius:8px;">
+    <span style="font-size:1.2rem; line-height:1.4;">{{ a.icono }}</span>
+    <div style="flex:1;">
+      <span style="font-size:0.72rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:0.5px; color:#641e16;">{{ a.tipo }}</span>
+      <p style="margin:2px 0 0; font-size:0.875rem; color:var(--text);">{{ a.texto | safe }}</p>
+    </div>
+    <a href="{{ a.link }}" class="btn btn-outline"
+       style="font-size:0.75rem; padding:4px 12px; white-space:nowrap; flex-shrink:0;">Ver →</a>
+  </div>
+  {% else %}
+  <div style="display:flex; align-items:flex-start; gap:12px; padding:12px 16px; margin-bottom:8px;
+              background:{{ color_fondo }}; border:1px solid {{ color_borde }};
+              border-left:4px solid {{ color_borde }}; border-radius:8px;">
+    <span style="font-size:1.2rem; line-height:1.4;">{{ a.icono }}</span>
+    <div style="flex:1;">
+      <span style="font-size:0.72rem; font-weight:700; text-transform:uppercase;
+                   letter-spacing:0.5px; color:{{ color_borde }};">{{ a.tipo }}</span>
+      <p style="margin:2px 0 0; font-size:0.875rem; color:var(--text);">{{ a.texto | safe }}</p>
+    </div>
+    <a href="{{ a.link }}" class="btn btn-outline"
+       style="font-size:0.75rem; padding:4px 12px; white-space:nowrap; flex-shrink:0;">Ver →</a>
+  </div>
+  {% endif %}
+  {% endfor %}
+  {% else %}
+  <div style="padding:14px 18px; background:rgba(39,174,96,0.08); border:1px solid #27ae60;
+              border-radius:8px; color:#22543d; font-size:0.85rem;">
+    ✅ {{ vacio_msg }}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+<!-- ══════════ 1) ALERTAS DE PAGO A PROVEEDORES — máxima prioridad ══════════ -->
+{{ seccion("🚨 Alertas de Pago a Proveedores", "#e53e3e", "rgba(229,62,62,0.06)", alertas_proveedor, "Sin pagos a proveedores en riesgo.") }}
+
+<!-- ══════════ 2) ALERTAS DE VIAJE — check-in, nada de dinero ══════════ -->
+{{ seccion("✈️ Alertas de Viaje", "#e53e3e", "rgba(229,62,62,0.06)", alertas_viaje, "Sin pendientes de check-in.") }}
+
+<!-- ══════════ 3) CARTERA VENCIDA — única fuente de verdad para deuda de cliente ══════════ -->
+<h2 style="font-size:1rem; font-weight:700; margin-bottom:16px;">💼 Cartera Vencida</h2>
+
+{% if cartera_vencida %}
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px; margin-bottom:16px;">
+  <div style="background:rgba(229,62,62,0.08); border-left:4px solid #e53e3e; border-radius:8px; padding:12px 16px; text-align:center;">
+    <div style="font-size:1.8rem; font-weight:700; color:#e53e3e;">{{ cartera_vencida | length }}</div>
+    <div style="font-size:0.75rem; color:var(--text2);">Clientes con deuda</div>
+  </div>
+  {% if total_vencido_mxn > 0 %}
+  <div style="background:rgba(217,119,6,0.08); border-left:4px solid #d97706; border-radius:8px; padding:12px 16px; text-align:center;">
+    <div style="font-size:1.3rem; font-weight:700; color:#d97706;">${{ '{:,.2f}'.format(total_vencido_mxn) }} MXN</div>
+    <div style="font-size:0.75rem; color:var(--text2);">Total deuda MXN</div>
+  </div>
+  {% endif %}
+  {% if total_vencido_usd > 0 %}
+  <div style="background:rgba(217,119,6,0.08); border-left:4px solid #d97706; border-radius:8px; padding:12px 16px; text-align:center;">
+    <div style="font-size:1.3rem; font-weight:700; color:#d97706;">${{ '{:,.2f}'.format(total_vencido_usd) }} USD</div>
+    <div style="font-size:0.75rem; color:var(--text2);">Total deuda USD</div>
+  </div>
+  {% endif %}
+</div>
+{% for r in cartera_vencida %}
+<div style="background:{% if r.escalado %}rgba(146,43,33,0.10){% else %}rgba(229,62,62,0.04){% endif %};
+            border:1px solid {% if r.escalado %}rgba(146,43,33,0.4){% else %}rgba(229,62,62,0.2){% endif %};
+            border-left:4px solid #e53e3e; border-radius:6px;
+            padding:10px 14px; margin-bottom:8px;
+            display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+  <div style="flex:1; font-size:0.875rem;">
+    {% if r.escalado %}<span style="color:#641e16; font-weight:700;">🚨🚨 MUY ATRASADO ({{ r.dias_atraso_max }} días) — </span>{% endif %}
+    <strong>{{ r.nombre }}</strong> &nbsp;·&nbsp; ✈️ {{ r.destino }}
+    &nbsp;·&nbsp; 📞 {{ r.telefono }}<br>
+    <span style="color:#e53e3e; font-weight:700;">Deuda: ${{ '{:,.2f}'.format(r.deuda) }} {{ r.moneda }}</span>
+    &nbsp;·&nbsp; Venta: ${{ '{:,.2f}'.format(r.venta_total) }}
+    &nbsp;·&nbsp; Cobrado: ${{ '{:,.2f}'.format(r.cobrado_cliente) }}
+    &nbsp;·&nbsp; <span style="color:var(--text2); font-size:0.82rem;">{{ r.estado_viaje }}</span>
+    {% if r.detalle_parcial %}<br><span style="color:#c0392b; font-size:0.8rem;">{{ r.detalle_parcial }}</span>{% endif %}
+  </div>
+  <div style="display:flex; gap:6px; flex-shrink:0;">
+    <a href="/bitacora/{{ r.id_reserva }}" class="btn btn-outline" style="font-size:0.75rem; padding:4px 10px;">Ver →</a>
+    <a href="{{ r.wa_url }}" target="_blank"
+       style="background:#25D366; color:white; padding:4px 12px; border-radius:20px;
+              text-decoration:none; font-size:0.75rem; font-weight:600; white-space:nowrap;">
+      💬 WhatsApp
+    </a>
+  </div>
+</div>
+{% endfor %}
+<div style="margin-top:10px;">
+  <a href="/alertas/cartera/exportar" class="btn btn-outline" style="font-size:0.82rem;">
+    📊 Exportar Cartera a Excel
+  </a>
+</div>
+
+{% else %}
+<div style="padding:18px 20px; background:rgba(39,174,96,0.08); border:1px solid #27ae60;
+            border-radius:8px; color:#22543d; font-size:0.875rem; margin-bottom:24px;">
+  ✅ <strong>Sin deudas vencidas.</strong> Todos los clientes al corriente o con pagos dentro del plan.
+</div>
+{% endif %}
+
+<!-- ══════════ 4) ADVERTENCIAS — cobranza próxima (no vencida) + sin anticipo ══════════ -->
+<hr style="border:none; border-top:1px solid var(--border); margin:24px 0;">
+{{ seccion("🟡 Advertencias", "#d97706", "rgba(217,119,6,0.06)", advertencias, "Sin advertencias activas.") }}
+
+<!-- ══════════ RADAR DE CUMPLEAÑOS ══════════ -->
+<hr style="border:none; border-top:1px solid var(--border); margin:24px 0;">
+<h2 style="font-size:1rem; font-weight:700; margin-bottom:16px;">🎂 Radar de Cumpleaños</h2>
+
+<!-- Próximos 7 días -->
+<h3 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+           color:var(--primary); margin-bottom:10px;">Próximos 7 días</h3>
+{% if cumples_proximos %}
+  {% for c in cumples_proximos %}
+  {% if c.valida %}
+  <div style="display:flex; align-items:center; gap:12px; padding:10px 16px; margin-bottom:8px;
+              background:rgba(0,71,171,0.06); border:1px solid rgba(0,71,171,0.2);
+              border-left:4px solid var(--primary); border-radius:8px; font-size:0.875rem;">
+    <span style="font-size:1.1rem;">🎉</span>
+    <div style="flex:1;">
+      En <strong>{{ c.dias_f }} día(s)</strong> ({{ c.fecha }}) —
+      <strong>{{ c.nombre }}</strong> cumple <strong>{{ c.edad }} años</strong>.
+      📞 {{ c.telefono }}
+    </div>
+  </div>
+  {% else %}
+  <div style="padding:10px 16px; margin-bottom:8px; background:rgba(217,119,6,0.06);
+              border:1px solid rgba(217,119,6,0.3); border-left:4px solid #d97706;
+              border-radius:8px; font-size:0.875rem;">
+    ⚠️ <strong>Fecha de nacimiento inválida:</strong>
+    <strong>{{ c.nombre }}</strong> — edad calculada: {{ c.edad }} años. Corregir en Base de Clientes.
+    📞 {{ c.telefono }}
+  </div>
+  {% endif %}
+  {% endfor %}
+{% else %}
+<p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin cumpleaños en los próximos 7 días.</p>
+{% endif %}
+
+<!-- Todos los cumpleaños del mes -->
+<div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0 10px;">
+  <h3 style="font-size:0.82rem; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;
+             color:var(--text2); margin:0;">Cumpleaños de</h3>
+  <form method="get" action="/alertas" style="display:flex; gap:6px; align-items:center;">
+    <select name="mes_cumple" class="field-select" style="width:140px; font-size:0.82rem; padding:4px 8px;"
+            onchange="this.form.submit()">
+      {% for mm, nombre in meses_dict.items() %}
+      <option value="{{ mm }}" {% if mes_cumple_mm == mm %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+{% if cumples_mes %}
+  {% for c in cumples_mes %}
+  <div style="display:flex; align-items:center; gap:12px; padding:8px 16px; margin-bottom:6px;
+              {% if c.es_hoy %}background:rgba(39,174,96,0.1); border-left:4px solid #27ae60;{% else %}background:rgba(128,128,128,0.05); border-left:4px solid #aaa;{% endif %}
+              border:1px solid {% if c.es_hoy %}rgba(39,174,96,0.3){% else %}rgba(128,128,128,0.15){% endif %};
+              border-radius:8px; font-size:0.85rem;">
+    <span>{% if c.es_hoy %}🎂{% else %}📅{% endif %}</span>
+    <div style="flex:1;">
+      Día <strong>{{ c.dia }}</strong> —
+      <strong>{{ c.nombre }}</strong>
+      {% if c.valida %}, <strong>{{ c.edad }} años</strong>{% else %}
+      <span style="color:#d97706; font-size:0.75rem;">(edad inválida)</span>{% endif %}
+      {% if c.telefono and c.telefono != '—' %}&nbsp;📞 {{ c.telefono }}{% endif %}
+      {% if c.es_hoy %}<span style="color:#27ae60; font-weight:700; margin-left:8px;">¡HOY! 🎉</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<p style="color:var(--text2); font-size:0.875rem;">Sin cumpleaños registrados en {{ nombre_mes_actual }}.</p>
+{% endif %}
+
+<!-- ══════════ CARTERA AL CORRIENTE ══════════ -->
+<hr style="border:none; border-top:1px solid var(--border); margin:24px 0;">
+<h2 style="font-size:1rem; font-weight:700; margin-bottom:12px;">💰 Cartera al Corriente</h2>
+<p style="font-size:0.82rem; color:var(--text2); margin-bottom:14px;">
+  Viajes futuros con saldo pendiente pero sin pagos vencidos — están dentro del plan.
+</p>
+
+{% if cartera_corriente %}
+<details {% if cartera_corriente | length <= 5 %}open{% endif %}>
+  <summary style="cursor:pointer; font-size:0.875rem; font-weight:600; color:var(--primary); padding:8px 0; list-style:none;">
+    📋 {{ cartera_corriente | length }} cliente(s) con saldo pendiente en viajes futuros
+    — Total MXN: ${{ '{:,.2f}'.format(total_corriente_mxn) }}
+    {% if total_corriente_usd > 0 %}&nbsp;·&nbsp; USD: ${{ '{:,.2f}'.format(total_corriente_usd) }}{% endif %}
+  </summary>
+  <div style="margin-top:10px;">
+    {% for r in cartera_corriente %}
+    <div style="background:rgba(0,71,171,0.04); border:1px solid rgba(0,71,171,0.15);
+                border-left:4px solid var(--primary); border-radius:6px;
+                padding:10px 14px; margin-bottom:8px;
+                display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+      <div style="flex:1; font-size:0.875rem;">
+        <strong>{{ r.nombre }}</strong> &nbsp;·&nbsp; ✈️ {{ r.destino }}<br>
+        Salida: <strong>{{ r.fecha_salida }}</strong>
+        &nbsp;·&nbsp;
+        Saldo pendiente: <strong style="color:var(--primary);">${{ '{:,.2f}'.format(r.deuda) }} {{ r.moneda }}</strong>
+        &nbsp;·&nbsp; Cobrado: ${{ '{:,.2f}'.format(r.cobrado_cliente) }} / ${{ '{:,.2f}'.format(r.venta_total) }}
+      </div>
+      <a href="/bitacora/{{ r.id_reserva }}" class="btn btn-outline" style="font-size:0.75rem; padding:4px 10px; flex-shrink:0;">Ver →</a>
+    </div>
+    {% endfor %}
+  </div>
+</details>
+{% else %}
+<div style="padding:18px 20px; background:rgba(39,174,96,0.08); border:1px solid #27ae60;
+            border-radius:8px; color:#22543d; font-size:0.875rem;">
+  ✅ Sin saldos pendientes en viajes futuros.
+</div>
+{% endif %}
+
+{% endblock %}

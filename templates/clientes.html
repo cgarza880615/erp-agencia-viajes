@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Clientes — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">👥 Clientes</h1>
+  <div style="display:flex; gap:8px;">
+    <a href="/clientes/exportar" class="btn btn-outline" style="font-size:0.82rem;">📊 Exportar Excel</a>
+    <a href="/clientes/nuevo" class="btn btn-primary">+ Nuevo Cliente</a>
+  </div>
+</div>
+
+<!-- Búsqueda -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-body" style="padding:14px 20px;">
+    <input class="field-input" type="search" placeholder="Buscar por nombre, teléfono, email o ID..."
+           style="max-width:420px; width:100%;"
+           hx-get="/clientes/rows"
+           hx-trigger="input changed delay:300ms, search"
+           hx-target="#tabla-clientes"
+           hx-swap="outerHTML"
+           name="q"
+           value="{{ q }}">
+  </div>
+</div>
+
+<!-- Tabla -->
+{% include "clientes_rows.html" %}
+
+{% endblock %}

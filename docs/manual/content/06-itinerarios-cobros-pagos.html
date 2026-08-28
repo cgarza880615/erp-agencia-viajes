@@ -1,0 +1,75 @@
+<div class="crumb"><a href="index.html">Manual</a> / Itinerarios — Cobros y Pagos</div>
+<div class="eyebrow">Módulo 6 · 2 de 3 sobre Itinerarios</div>
+<h1>💰 Itinerarios — Cobros y Pagos</h1>
+<p class="lede">Toda la parte de dinero de un itinerario: cuánto ha pagado el cliente, cuánto se le debe a cada proveedor, y qué tan sana está la utilidad.</p>
+
+<h2>El detalle de un itinerario, de un vistazo</h2>
+<h3>Semáforo de Proveedores</h3>
+<p>Una pastilla por cada servicio (Vuelo, TUA, Hotel, Traslados, Tours, Adicionales) que compara <strong>lo pagado</strong> contra <strong>el costo registrado</strong>:</p>
+<table class="field-ref">
+  <tr><th>Color</th><th>Significa</th></tr>
+  <tr><td><span class="chip ok">🟢 Verde</span></td><td>Ya se pagó completo al proveedor.</td></tr>
+  <tr><td><span class="chip danger">🔴 Rojo</span></td><td>Falta pagar — muestra "pagado / costo total".</td></tr>
+  <tr><td>⚪ Gris (N/A)</td><td>Ese servicio no aplica a este viaje (costo en $0).</td></tr>
+</table>
+
+<div class="callout note">
+  <strong>Nota</strong>
+  El semáforo se calcula solo, a partir de los pagos a proveedor que registres — nunca se marca a mano. Por eso el check-list operativo (a la derecha) ya no tiene una casilla de "Pagado al proveedor": para evitar que alguien la marque manualmente sin que el pago sea real.
+</div>
+
+<h2>Control de Caja</h2>
+<table class="field-ref">
+  <tr><th>Tarjeta</th><th>Qué significa</th></tr>
+  <tr><td><strong>Cobrado al cliente</strong></td><td>Todo lo que el cliente ha pagado hasta hoy.</td></tr>
+  <tr><td><strong>Pagado a proveedores</strong></td><td>Todo lo que la agencia le ha pagado a hoteles, aerolíneas, etc.</td></tr>
+  <tr><td><strong>Retenido sin aplicar</strong></td><td>De lo cobrado, lo que todavía hace falta para cubrir la deuda a proveedores — dinero comprometido, no ganancia.</td></tr>
+  <tr><td><strong>Deuda a proveedores</strong></td><td>Lo que falta por pagar en total.</td></tr>
+  <tr><td><strong>Utilidad</strong></td><td>Lo que ya es ganancia real — solo aparece una vez que la deuda a proveedores está cubierta.</td></tr>
+</table>
+
+<h2>Plan de pagos del cliente</h2>
+<ol class="steps">
+  <li><div class="step-body"><strong>Elige la frecuencia</strong>: Personalizado (tú pones fecha y monto de cada pago) o un preset (Semanal/Quincenal/Mensual, que reparte el saldo entre las fechas automáticamente).</div></li>
+  <li><div class="step-body"><strong>Revisa la suma</strong> — el sistema no te deja generar el plan si la suma de los pagos no cuadra exactamente con el saldo pendiente.</div></li>
+  <li><div class="step-body"><strong>Genera el plan.</strong></div></li>
+</ol>
+
+<h2>Registrar un cobro</h2>
+<p>El abono se aplica automáticamente a la parcialidad pendiente más antigua — no hace falta elegir cómo repartirlo. Si el método es <strong>Tarjeta de Crédito/Débito</strong>, aparece un campo de % de comisión de la terminal, y un aviso en vivo con el monto neto que realmente llega a la cuenta.</p>
+
+<div class="callout warning">
+  <strong>Candado</strong>
+  El sistema no permite registrar un cobro por más del saldo pendiente del itinerario.
+</div>
+
+<h2>Pagos a Proveedores</h2>
+<p>Aquí se registra lo que la agencia le paga a cada proveedor (Vuelo, TUA, Hotel, Traslados, Tours, Adicionales, o Paquete completo si es un paquete todo incluido).</p>
+
+<div class="callout warning">
+  <strong>Candado de pago doble</strong>
+  Si el total ya pagado a un proveedor iguala o supera el costo registrado, el sistema bloquea el intento de registrar otro pago a esa misma categoría — para evitar pagar dos veces por error.
+</div>
+
+<div class="callout tip">
+  <strong>Pago final</strong>
+  Si marcas la casilla "Pago final" al registrar, y el monto pagado es distinto al costo que tenías capturado, el sistema ajusta automáticamente ese costo (y la utilidad) al monto real que terminaste pagando.
+</div>
+
+<h2>❓ Preguntas Frecuentes</h2>
+<details class="faq">
+  <summary>¿Por qué no me deja generar el plan de pagos?</summary>
+  <p class="faq-body">Porque la suma de las parcialidades que capturaste no cierra exactamente con el saldo pendiente real del itinerario. Ajusta los montos (o usa un preset como Semanal/Quincenal/Mensual, que reparte el saldo solo) hasta que la suma sea igual al saldo pendiente.</p>
+</details>
+<details class="faq">
+  <summary>¿Por qué no me deja registrar este cobro?</summary>
+  <p class="faq-body">El sistema bloquea un cobro si el monto es mayor al saldo pendiente del itinerario — revisa el saldo actual en la tarjeta Cobro·Costo·Utilidad antes de capturar el monto.</p>
+</details>
+<details class="faq">
+  <summary>Registré un cobro con el monto equivocado, ¿lo edito?</summary>
+  <p class="faq-body">No se edita directamente — se anula (con motivo, queda en auditoría) y se vuelve a capturar bien. Si tenía comisión de tarjeta asociada, al anular el cobro esa comisión también se revierte sola.</p>
+</details>
+<details class="faq">
+  <summary>¿Por qué no me deja registrar este pago a proveedor?</summary>
+  <p class="faq-body">Es el candado de pago doble: si lo ya pagado a esa categoría (ej. Hotel) iguala o supera el costo registrado, el sistema no deja registrar otro pago ahí — para evitar pagarle dos veces al mismo proveedor por error.</p>
+</details>

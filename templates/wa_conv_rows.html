@@ -1,0 +1,40 @@
+{% for c in convs %}
+<div class="wa-conv-item {% if c.estado == 'NUEVO' %}wa-nuevo{% endif %}"
+     hx-get="/wa/{{ c.id }}/chat"
+     hx-target="#wa-right"
+     hx-swap="innerHTML"
+     hx-trigger="click"
+     onclick="document.querySelectorAll('.wa-conv-item').forEach(function(el){el.classList.remove('active')}); this.classList.add('active');">
+  <div class="wa-avatar">{{ (c.nombre or c.wa_id or '?')[:1] | upper }}</div>
+  <div class="wa-conv-body">
+    <div class="wa-conv-top">
+      <span class="wa-conv-name">{{ c.nombre_cliente or c.nombre or c.wa_id }}</span>
+      <span class="wa-conv-time">
+        {% if c.ultimo_mensaje_ts %}{{ c.ultimo_mensaje_ts[-8:-3] if c.ultimo_mensaje_ts|length > 8 else c.ultimo_mensaje_ts }}{% endif %}
+      </span>
+    </div>
+    <div class="wa-conv-preview">{{ (c.ultimo_mensaje or '')[:60] }}</div>
+    <div class="wa-conv-meta">
+      {% if c.agente_asignado %}<span class="wa-badge-agente">{{ c.agente_asignado }}</span>{% endif %}
+      <span class="wa-estado-badge wa-estado-{{ c.estado | lower }}">{{ c.estado }}</span>
+      {% if c.etapa_nombre %}
+      <span style="font-size:0.68rem; padding:1px 6px; border-radius:10px; font-weight:600;
+                   background:{{ c.etapa_color }}22; color:{{ c.etapa_color }};
+                   border:1px solid {{ c.etapa_color }}44;">
+        {{ c.etapa_emoji }} {{ c.etapa_nombre }}
+      </span>
+      {% endif %}
+      {% if c.etiquetas %}
+      {% for et in c.etiquetas.split('||') %}
+      {% set parts = et.split('::') %}
+      <span style="font-size:0.65rem; padding:1px 5px; border-radius:8px;
+                   background:{{ parts[1] if parts|length > 1 else '#888' }};
+                   color:white; font-weight:600;">{{ parts[0] }}</span>
+      {% endfor %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% else %}
+<p style="padding:24px 16px; color:#aaa; text-align:center; font-size:0.82rem;">Sin conversaciones</p>
+{% endfor %}

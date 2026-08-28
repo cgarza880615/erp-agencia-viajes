@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}{{ folio }} — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <a href="/cotizaciones" class="btn btn-outline" style="font-size:0.8rem;">← Cotizaciones</a>
+  <div style="flex:1;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+      <h1 class="page-title" style="margin:0;">💰 {{ folio }}</h1>
+      {% if cot.estado == 'PENDIENTE' %}
+        <span class="badge badge-yellow">PENDIENTE</span>
+      {% elif cot.estado == 'ENVIADA' %}
+        <span class="badge" style="background:#e0f2fe; color:#0369a1;">ENVIADA</span>
+      {% elif cot.estado == 'ACEPTADA' %}
+        <span class="badge badge-green">ACEPTADA</span>
+      {% elif cot.estado == 'RECHAZADA' %}
+        <span class="badge badge-red">RECHAZADA</span>
+      {% elif cot.estado == 'EXPIRADA' %}
+        <span class="badge" style="background:#f1f5f9; color:#94a3b8;">EXPIRADA</span>
+      {% endif %}
+    </div>
+    <p style="color:var(--text2); font-size:0.875rem; margin-top:4px;">
+      {{ cot.nombre_cliente }} &nbsp;·&nbsp; {{ cot.destino }}
+    </p>
+  </div>
+  {% if cot.estado in ('PENDIENTE', 'ENVIADA') %}
+  <a href="/cotizaciones/{{ cot.id_cotizacion }}/editar" class="btn btn-outline">✏️ Editar</a>
+  {% endif %}
+</div>
+
+{% if flash %}
+<div class="alerta-inline alerta-{% if flash.tipo == 'ok' %}warning{% else %}critica{% endif %}"
+     style="margin-bottom:16px;">{{ flash.texto }}</div>
+{% endif %}
+
+{% if cot.convertida_a_reserva %}
+<div class="alerta-inline alerta-warning" style="margin-bottom:16px;">
+  ✅ Esta cotización fue convertida al
+  <a href="/bitacora/{{ cot.convertida_a_reserva }}" style="font-weight:700;">
+    Itinerario #{{ cot.convertida_a_reserva }}
+  </a>
+</div>
+{% endif %}
+
+<!-- Grid info -->
+<div class="detalle-grid">
+
+  <!-- Datos del viaje -->
+  <div class="card">
+    <div class="card-header">🗺️ Viaje</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        <dt>Destino</dt>      <dd>{{ cot.destino }}</dd>
+        <dt>Origen</dt>       <dd>{{ cot.origen or 'Monterrey' }}</dd>
+        <dt>Salida</dt>       <dd>{{ cot.fecha_salida }}</dd>
+        <dt>Regreso</dt>      <dd>{{ cot.fecha_regreso }}</dd>
+        <dt>Pasajeros</dt>    <dd>{{ cot.num_adultos or 1 }} adulto(s){% if cot.num_menores %}, {{ cot.num_menores }} menor(es){% endif %}</dd>
+        {% if cot.hotel_op2_cobro and cot.hotel_op2_cobro > 0 %}
+          <dt>Hotel Op.1</dt><dd>{{ cot.nombre_hotel or '—' }}</dd>
+          <dt>Hotel Op.2</dt><dd>{{ cot.hotel_op2_nombre or '—' }}</dd>
+          {% if cot.hotel_op3_cobro and cot.hotel_op3_cobro > 0 %}
+          <dt>Hotel Op.3</dt><dd>{{ cot.hotel_op3_nombre or '—' }}</dd>
+          {% endif %}
+        {% elif cot.nombre_hotel %}
+          <dt>Hotel</dt><dd>{{ cot.nombre_hotel }}</dd>
+        {% endif %}
+        {% if cot.aerolinea %}<dt>Aerolínea</dt><dd>{{ cot.aerolinea }}</dd>{% endif %}
+        {% if cot.mayorista %}<dt>Mayorista</dt><dd>{{ cot.mayorista }}</dd>{% endif %}
+        {% if cot.fecha_vuelo_ida %}<dt>Vuelo ida</dt><dd>{{ cot.fecha_vuelo_ida }}{% if cot.hora_vuelo_ida %} {{ cot.hora_vuelo_ida }}{% endif %}</dd>{% endif %}
+        {% if cot.fecha_vuelo_vuelta %}<dt>Vuelo vta.</dt><dd>{{ cot.fecha_vuelo_vuelta }}{% if cot.hora_vuelo_vuelta %} {{ cot.hora_vuelo_vuelta }}{% endif %}</dd>{% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <!-- Cliente -->
+  <div class="card">
+    <div class="card-header">👤 Cliente</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        <dt>Nombre</dt>
+        <dd><strong><a href="/clientes/{{ cot.id_cliente }}" style="color:var(--primary);">{{ cot.nombre_cliente }}</a></strong></dd>
+        <dt>Teléfono</dt>  <dd>{{ cot.telefono or '—' }}</dd>
+        <dt>Email</dt>     <dd>{{ cot.email or '—' }}</dd>
+        <dt>Lím. pago</dt> <dd {% if cot.fecha_limite_pago and cot.fecha_limite_pago < today %}style="color:var(--danger); font-weight:600;"{% endif %}>
+          {{ cot.fecha_limite_pago or '—' }}</dd>
+        <dt>Vigencia</dt>  <dd>{{ cot.fecha_vencimiento or '—' }}</dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- Finanzas -->
+  <div class="card">
+    <div class="card-header">💰 Totales</div>
+    <div class="card-body">
+      {% if cot.hotel_op2_cobro and cot.hotel_op2_cobro > 0 %}
+        {% set _base = (cot.cobro_vuelos or 0) + (cot.cobro_tua or 0) + (cot.cobro_traslados or 0) + (cot.cobro_tours or 0) + (cot.cobro_adicionales or 0) %}
+        <table style="font-size:0.875rem; width:100%; border-collapse:collapse;">
+          <thead><tr>
+            <th style="text-align:left; padding:4px 8px 4px 0; color:var(--text2); font-size:0.78rem;">OPCIÓN</th>
+            <th style="text-align:right; padding:4px 0; color:var(--text2); font-size:0.78rem;">TOTAL</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:4px 8px 4px 0;">Opción 1 — {{ cot.nombre_hotel or '—' }}</td>
+                <td style="text-align:right;"><strong>{{ (_base + (cot.cobro_hotel or 0)) | moneda(cot.moneda) }}</strong></td></tr>
+            <tr><td style="padding:4px 8px 4px 0;">Opción 2 — {{ cot.hotel_op2_nombre or '—' }}</td>
+                <td style="text-align:right;"><strong>{{ (_base + (cot.hotel_op2_cobro or 0)) | moneda(cot.moneda) }}</strong></td></tr>
+            {% if cot.hotel_op3_cobro and cot.hotel_op3_cobro > 0 %}
+            <tr><td style="padding:4px 8px 4px 0;">Opción 3 — {{ cot.hotel_op3_nombre or '—' }}</td>
+                <td style="text-align:right;"><strong>{{ (_base + (cot.hotel_op3_cobro or 0)) | moneda(cot.moneda) }}</strong></td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+        {% if cot.anticipo_requerido %}
+        <p style="font-size:0.8rem; color:var(--text2); margin:8px 0 0;">
+          Anticipo requerido: <strong>{{ cot.anticipo_requerido | moneda(cot.moneda) }}</strong>
+        </p>
+        {% endif %}
+      {% else %}
+      <dl class="datos-list">
+        <dt>Venta total</dt>
+        <dd class="money"><strong>{{ cot.venta_total | moneda(cot.moneda) }}</strong></dd>
+        <dt>Costo total</dt>
+        <dd class="money">{{ cot.costo_total | moneda(cot.moneda) }}</dd>
+        <dt>Utilidad</dt>
+        <dd class="money money-positive">{{ cot.utilidad_proyectada | moneda(cot.moneda) }}</dd>
+        {% if cot.anticipo_requerido %}
+        <dt>Anticipo req.</dt>
+        <dd class="money">{{ cot.anticipo_requerido | moneda(cot.moneda) }}</dd>
+        {% endif %}
+      </dl>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Servicios incluidos -->
+  <div class="card">
+    <div class="card-header">✅ Servicios</div>
+    <div class="card-body">
+      <dl class="datos-list">
+        {% set servicios = [
+          ('incluye_vuelo',    'cobro_vuelos',   'Vuelo'),
+          ('incluye_tua',      'cobro_tua',      'TUA'),
+          ('incluye_traslado', 'cobro_traslados','Traslados'),
+          ('incluye_tours',    'cobro_tours',    'Tours'),
+        ] %}
+        {% for chk, campo, label in servicios %}
+        {% if cot.get(chk) or (cot.get(campo) and cot[campo] > 0) %}
+        <dt>{{ label }}</dt>
+        <dd>
+          {% if cot.get(chk) %}<span style="color:var(--primary);">✓</span>{% endif %}
+          {% if cot.get(campo) and cot[campo] > 0 %}{{ cot[campo] | moneda(cot.moneda) }}{% endif %}
+        </dd>
+        {% endif %}
+        {% endfor %}
+        {% if cot.cobro_hotel and cot.cobro_hotel > 0 %}
+        <dt>Hotel</dt>
+        <dd><span style="color:var(--primary);">✓</span>
+          {% if not (cot.hotel_op2_cobro and cot.hotel_op2_cobro > 0) %}
+            {{ cot.cobro_hotel | moneda(cot.moneda) }}
+          {% else %}
+            <small style="color:var(--text2);">ver opciones →</small>
+          {% endif %}
+        </dd>
+        {% endif %}
+        {% if cot.cobro_adicionales and cot.cobro_adicionales > 0 %}
+        <dt>Adicionales</dt>
+        <dd>{{ cot.cobro_adicionales | moneda(cot.moneda) }}
+          {% if cot.especificar_adicionales %}<small style="color:var(--text2);"> — {{ cot.especificar_adicionales }}</small>{% endif %}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+</div>
+
+<!-- Plan de pagos preview -->
+{% if plan_preview %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📅 Plan de pagos sugerido
+    <small style="font-weight:400; color:var(--text2); margin-left:8px;">{{ cot.tipo_plan }}</small>
+  </div>
+  <div class="card-body">
+    {% if plans_por_opcion %}
+      {% for opcion_label, opcion_total, opcion_plan in plans_por_opcion %}
+      <p style="font-size:0.82rem; font-weight:600; color:var(--primary); margin:12px 0 6px;">
+        {{ opcion_label }} — Total: {{ opcion_total | moneda(cot.moneda) }}
+      </p>
+      <table style="font-size:0.875rem; margin-bottom:8px;">
+        <thead><tr><th>Concepto</th><th>Fecha</th><th style="text-align:right;">Monto</th></tr></thead>
+        <tbody>
+          {% for p in opcion_plan %}
+          <tr>
+            <td style="padding:4px 12px;">{{ p.concepto }}</td>
+            <td style="padding:4px 12px; color:var(--text2);">{{ p.fecha }}</td>
+            <td style="padding:4px 12px; text-align:right;">{{ p.monto | moneda(cot.moneda) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endfor %}
+    {% else %}
+    <table style="font-size:0.875rem;">
+      <thead>
+        <tr><th>Concepto</th><th>Fecha</th><th style="text-align:right;">Monto</th></tr>
+      </thead>
+      <tbody>
+        {% for p in plan_preview %}
+        <tr>
+          <td style="padding:5px 12px;">{{ p.concepto }}</td>
+          <td style="padding:5px 12px; color:var(--text2);">{{ p.fecha }}</td>
+          <td style="padding:5px 12px; text-align:right;">{{ p.monto | moneda(cot.moneda) }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="border-top:2px solid var(--border); font-weight:700;">
+          <td style="padding:5px 12px;">TOTAL</td>
+          <td></td>
+          <td style="padding:5px 12px; text-align:right;">{{ cot.venta_total | moneda(cot.moneda) }}</td>
+        </tr>
+      </tbody>
+    </table>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Notas -->
+{% if cot.notas %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📝 Notas</div>
+  <div class="card-body">
+    <p style="margin:0; white-space:pre-line; font-size:0.875rem;">{{ cot.notas }}</p>
+  </div>
+</div>
+{% endif %}
+
+<!-- Documentos + WhatsApp -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">📄 Documentos y Envío</div>
+  <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+    <a href="/cotizaciones/{{ cot.id_cotizacion }}/pdf" target="_blank"
+       class="btn btn-outline" style="font-size:0.875rem;">
+      📋 Descargar PDF
+    </a>
+    {% if cot.telefono %}
+    {% set wa_num = cot.telefono | replace(' ','') | replace('-','') | replace('+','') %}
+    {% set wa_num = '52' + wa_num if wa_num | length == 10 else wa_num %}
+    {% set wa_msg = '¡Hola ' + cot.nombre_cliente.split()[0] + '! Te comparto tu cotización ' + folio + ' para ' + cot.destino + ' del ' + (cot.fecha_salida or '') + '. Total: ' + cot.venta_total|string + ' ' + cot.moneda + '. Consulta el PDF adjunto.' %}
+    <a href="https://wa.me/{{ wa_num }}?text={{ wa_msg | urlencode }}" target="_blank"
+       class="btn btn-outline" style="font-size:0.875rem; color:#25d366; border-color:#25d366;">
+      💬 WhatsApp
+    </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Acciones de estado -->
+{% if cot.estado in ('PENDIENTE', 'ENVIADA', 'ACEPTADA') and not cot.convertida_a_reserva %}
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🔄 Cambiar Estado</div>
+  <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap;">
+
+    {% if cot.estado == 'PENDIENTE' %}
+    <form method="post" action="/cotizaciones/{{ cot.id_cotizacion }}/estado">
+      <input type="hidden" name="estado" value="ENVIADA">
+      <button class="btn btn-outline" style="border-color:#0369a1; color:#0369a1;">
+        📤 Marcar como Enviada
+      </button>
+    </form>
+    {% endif %}
+
+    {% if cot.estado in ('PENDIENTE', 'ENVIADA') %}
+    <form method="post" action="/cotizaciones/{{ cot.id_cotizacion }}/estado">
+      <input type="hidden" name="estado" value="ACEPTADA">
+      <button class="btn btn-outline" style="border-color:var(--primary); color:var(--primary);">
+        ✅ Marcar como Aceptada
+      </button>
+    </form>
+    <form method="post" action="/cotizaciones/{{ cot.id_cotizacion }}/estado">
+      <input type="hidden" name="estado" value="RECHAZADA">
+      <button class="btn btn-outline" style="border-color:var(--danger); color:var(--danger);">
+        ✗ Marcar como Rechazada
+      </button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endif %}
+
+<!-- Convertir a Itinerario -->
+{% if cot.estado == 'ACEPTADA' and not cot.convertida_a_reserva %}
+<div class="card" style="margin-bottom:16px; border-color:var(--primary);">
+  <div class="card-header" style="color:var(--primary);">🚀 Convertir a Itinerario</div>
+  <div class="card-body">
+    <div class="alerta-inline alerta-warning" style="margin-bottom:16px;">
+      Esto creará un nuevo Itinerario con todos los datos de la cotización, generará el plan de pagos y
+      registrará al cliente como pasajero titular. La cotización quedará vinculada al itinerario creado.
+    </div>
+    <form method="post" action="/cotizaciones/{{ cot.id_cotizacion }}/convertir" id="form-convertir">
+      {% if cot.hotel_op2_cobro and cot.hotel_op2_cobro > 0 %}
+      <div style="margin-bottom:14px;">
+        <p style="font-size:0.85rem; font-weight:600; margin:0 0 8px;">🏨 ¿Cuál opción de hotel aceptó el cliente?</p>
+        <label style="margin-right:16px; font-size:0.85rem;">
+          <input type="radio" name="hotel_opcion_elegida" value="1" checked> Opción 1
+        </label>
+        <label style="margin-right:16px; font-size:0.85rem;">
+          <input type="radio" name="hotel_opcion_elegida" value="2"> Opción 2
+        </label>
+        {% if cot.hotel_op3_cobro and cot.hotel_op3_cobro > 0 %}
+        <label style="font-size:0.85rem;">
+          <input type="radio" name="hotel_opcion_elegida" value="3"> Opción 3
+        </label>
+        {% endif %}
+      </div>
+      {% else %}
+      <input type="hidden" name="hotel_opcion_elegida" value="1">
+      {% endif %}
+      <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; margin-bottom:16px; cursor:pointer;">
+        <input type="checkbox" id="chk-convertir"
+               onchange="document.getElementById('btn-convertir').disabled = !this.checked">
+        Confirmo convertir <strong style="margin:0 4px;">{{ folio }}</strong>
+        para <strong style="margin:0 4px;">{{ cot.nombre_cliente }}</strong> a Itinerario.
+      </label>
+      <button type="submit" id="btn-convertir"
+              class="btn btn-primary" style="font-size:0.9rem;" disabled>
+        🚀 Confirmar — Crear Itinerario
+      </button>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

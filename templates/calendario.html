@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Calendario — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:20px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">📅 Calendario</h1>
+</div>
+
+<!-- Navegación mes -->
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;">
+  <a href="/calendario?mes={{ mes_prev }}&anio={{ anio_prev }}"
+     class="btn btn-outline" style="font-size:0.82rem; padding:6px 14px;">◀ Anterior</a>
+  <span style="font-size:1.1rem; font-weight:700; color:var(--primary); min-width:160px; text-align:center;">
+    {{ nombre_mes }} {{ anio }}
+  </span>
+  <a href="/calendario?mes={{ mes_next }}&anio={{ anio_next }}"
+     class="btn btn-outline" style="font-size:0.82rem; padding:6px 14px;">Siguiente ▶</a>
+  <a href="/calendario" class="btn btn-primary" style="font-size:0.78rem; padding:6px 14px; margin-left:6px;">Hoy</a>
+
+  <!-- Ir a mes/año -->
+  <form method="get" action="/calendario" style="display:flex; gap:6px; align-items:center; margin-left:auto;">
+    <select name="mes" class="field-select" style="width:110px; font-size:0.82rem;">
+      {% for k, v in meses_dict.items() %}
+      <option value="{{ k }}" {% if k == '%02d'|format(mes|int) %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <select name="anio" class="field-select" style="width:90px; font-size:0.82rem;">
+      {% for a in anios %}
+      <option value="{{ a }}" {% if a|string == anio|string %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-outline" style="font-size:0.78rem; padding:6px 10px;">Ir</button>
+  </form>
+</div>
+
+<!-- Resumen del mes -->
+<div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+  <div style="background:rgba(0,71,171,0.08); border-left:3px solid var(--primary); border-radius:6px;
+              padding:8px 14px; font-size:0.82rem;">
+    ✈️ <strong>{{ stats.n_activos }}</strong> viaje(s) activo(s)
+  </div>
+  <div style="background:rgba(39,174,96,0.08); border-left:3px solid var(--primary); border-radius:6px;
+              padding:8px 14px; font-size:0.82rem;">
+    🛫 <strong>{{ stats.n_salidas }}</strong> salida(s)
+  </div>
+  <div style="background:rgba(0,71,171,0.05); border-left:3px solid #7dd3fc; border-radius:6px;
+              padding:8px 14px; font-size:0.82rem;">
+    🛬 <strong>{{ stats.n_regresos }}</strong> regreso(s)
+  </div>
+  <div style="background:rgba(217,119,6,0.08); border-left:3px solid #d97706; border-radius:6px;
+              padding:8px 14px; font-size:0.82rem;">
+    💳 <strong>{{ stats.n_pagos }}</strong> pago(s) programado(s)
+  </div>
+</div>
+
+<!-- Leyenda -->
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; font-size:0.75rem;">
+  <span style="background:#27ae60; color:white; padding:2px 8px; border-radius:4px;">🟢 Liquidado</span>
+  <span style="background:#e67e22; color:white; padding:2px 8px; border-radius:4px;">🟠 Saldo pendiente</span>
+  <span style="background:#e74c3c; color:white; padding:2px 8px; border-radius:4px;">🔴 Check-in urgente</span>
+  <span style="background:#f39c12; color:white; padding:2px 8px; border-radius:4px;">💳 Pago programado</span>
+  <span style="color:var(--text2);">🛫 Salida · ✈️ En viaje · 🛬 Regreso</span>
+</div>
+
+<!-- Grilla del calendario -->
+<div class="card" style="padding:0; overflow:hidden;">
+  <!-- Cabecera días -->
+  <div style="display:grid; grid-template-columns:repeat(7,1fr); background:var(--gradient);">
+    {% for dn in ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'] %}
+    <div style="text-align:center; font-weight:700; color:white; font-size:0.78rem;
+                padding:8px 4px; opacity:{% if loop.index >= 6 %}0.7{% else %}1{% endif %};">
+      {{ dn }}
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Semanas -->
+  {% for week in cal_weeks %}
+  <div style="display:grid; grid-template-columns:repeat(7,1fr); border-top:1px solid var(--border);">
+    {% for day in week %}
+    <div style="min-height:100px; padding:5px 6px; border-right:1px solid var(--border);
+                {% if loop.last %}border-right:none;{% endif %}
+                {% if not day.num %}background:#fafafa;{% elif day.es_hoy %}background:rgba(0,71,171,0.06); border:2px solid var(--primary); margin:-1px;{% endif %}">
+      {% if day.num %}
+      <div style="font-weight:700; font-size:0.82rem; margin-bottom:4px;
+                  {% if day.es_hoy %}color:var(--primary);{% else %}color:var(--text2);{% endif %}">
+        {{ day.num }}{% if day.es_hoy %} ●{% endif %}
+      </div>
+      {% for ev in day.events %}
+      {% if ev.url %}
+      <a href="{{ ev.url }}" style="display:block; padding:2px 5px; border-radius:3px; font-size:0.68rem; margin-bottom:2px;
+                  overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600; color:white;
+                  text-decoration:none;
+                  background:{% if ev.cls == 'rojo' %}#e74c3c{% elif ev.cls == 'naranja' %}#e67e22{% elif ev.cls == 'verde' %}#27ae60{% elif ev.cls == 'pago' %}#f39c12{% else %}#95a5a6{% endif %};"
+           title="{{ ev.title }}">
+        {{ ev.icono }} {{ ev.label }}
+      </a>
+      {% else %}
+      <div style="padding:2px 5px; border-radius:3px; font-size:0.68rem; margin-bottom:2px;
+                  overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-weight:600; color:white;
+                  background:{% if ev.cls == 'rojo' %}#e74c3c{% elif ev.cls == 'naranja' %}#e67e22{% elif ev.cls == 'verde' %}#27ae60{% elif ev.cls == 'pago' %}#f39c12{% else %}#95a5a6{% endif %};"
+           title="{{ ev.title }}">
+        {{ ev.icono }} {{ ev.label }}
+      </div>
+      {% endif %}
+      {% endfor %}
+      {% if day.extra > 0 %}
+      <div style="padding:2px 5px; border-radius:3px; font-size:0.65rem; color:#666;
+                  background:#ecf0f1; font-style:italic;">+{{ day.extra }} más</div>
+      {% endif %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Próximos 7 días -->
+{% if proximos_7 %}
+<div style="margin-top:24px;">
+  <h2 style="font-size:0.9rem; font-weight:700; margin-bottom:12px; text-transform:uppercase;
+             letter-spacing:0.05em; color:var(--text2);">📋 Próximos 7 días</h2>
+  {% for dia in proximos_7 %}
+  <div style="background:{% if loop.first %}rgba(0,71,171,0.08){% else %}rgba(128,128,128,0.04){% endif %};
+              border-left:4px solid {% if loop.first %}var(--primary){% else %}rgba(128,128,128,0.25){% endif %};
+              border-radius:6px; padding:10px 14px; margin-bottom:8px; font-size:0.875rem;">
+    <strong style="color:{% if loop.first %}var(--primary){% else %}var(--text){% endif %};">
+      {{ dia.label }}
+    </strong>
+    &nbsp;—&nbsp;
+    {{ dia.eventos | join(' &nbsp;·&nbsp; ') | safe }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

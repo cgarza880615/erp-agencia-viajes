@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp | Agencia{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Override main-content padding para bandeja de pantalla completa */
+  .main-content { padding: 0 !important; overflow: hidden; }
+
+  .wa-container {
+    display: flex;
+    height: calc(100vh - 0px);
+    background: #f0f2f5;
+  }
+
+  /* ── Panel izquierdo: lista de conversaciones ── */
+  .wa-left {
+    width: 340px;
+    min-width: 280px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+  }
+  .wa-left-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #e9ecef;
+    background: #fff;
+  }
+  .wa-left-header h2 {
+    margin: 0 0 10px;
+    font-size: 1rem;
+    font-weight: 700;
+    color: #1a1a2e;
+  }
+  .wa-search-row {
+    display: flex;
+    gap: 6px;
+  }
+  .wa-search-row input {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 0.82rem;
+    outline: none;
+    background: #f5f6fa;
+  }
+  .wa-search-row select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 0.78rem;
+    background: #f5f6fa;
+    cursor: pointer;
+  }
+  .wa-conv-list {
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  /* ── Ítem de conversación ── */
+  .wa-conv-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.15s;
+  }
+  .wa-conv-item:hover  { background: #f5f6fa; }
+  .wa-conv-item.active { background: #e8f4ff; }
+  .wa-conv-item.wa-nuevo { border-left: 3px solid #0077cc; }
+
+  .wa-avatar {
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0047ab, #0077cc);
+    color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .wa-conv-body { flex: 1; min-width: 0; }
+  .wa-conv-top {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 2px;
+  }
+  .wa-conv-name {
+    font-size: 0.88rem; font-weight: 600; color: #1a1a2e;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 160px;
+  }
+  .wa-conv-time {
+    font-size: 0.7rem; color: #888; flex-shrink: 0;
+  }
+  .wa-conv-preview {
+    font-size: 0.78rem; color: #666;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 3px;
+  }
+  .wa-conv-meta { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .wa-badge-agente {
+    font-size: 0.68rem; background: #e3f2fd; color: #1565c0;
+    padding: 1px 6px; border-radius: 10px;
+  }
+  .wa-estado-badge {
+    font-size: 0.68rem; padding: 1px 6px; border-radius: 10px; font-weight: 600;
+  }
+  .wa-estado-nuevo    { background: #e3f2fd; color: #0047ab; }
+  .wa-estado-abierto  { background: #e8f5e9; color: #2e7d32; }
+  .wa-estado-resuelto { background: #f5f5f5; color: #757575; }
+
+  /* ── Panel derecho: chat ── */
+  .wa-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .wa-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #aaa;
+    font-size: 0.9rem;
+    gap: 10px;
+  }
+  .wa-placeholder span { font-size: 3rem; }
+
+  /* ── Cabecera del chat ── */
+  .wa-chat-header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+  .wa-chat-header .wa-avatar { width: 36px; height: 36px; font-size: 0.9rem; }
+  .wa-chat-header-info { flex: 1; }
+  .wa-chat-header-name { font-size: 0.92rem; font-weight: 700; color: #1a1a2e; }
+  .wa-chat-header-meta { font-size: 0.74rem; color: #888; }
+  .wa-chat-header-actions { display: flex; gap: 6px; }
+  .wa-btn {
+    padding: 5px 12px; font-size: 0.78rem; border-radius: 6px;
+    border: 1px solid #ddd; cursor: pointer; background: #fff;
+    transition: background 0.15s;
+  }
+  .wa-btn:hover { background: #f5f6fa; }
+  .wa-btn-primary { background: #0047ab; color: #fff; border-color: #0047ab; }
+  .wa-btn-primary:hover { background: #003899; }
+  .wa-btn-danger  { background: #fff; color: #c62828; border-color: #c62828; }
+
+  /* ── Área de mensajes ── */
+  .wa-messages {
+    flex: 1; overflow-y: auto; padding: 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    background: #f0f2f5;
+  }
+  .wa-msg {
+    max-width: 70%; display: flex; flex-direction: column; gap: 2px;
+  }
+  .wa-msg.entrante { align-self: flex-start; }
+  .wa-msg.saliente { align-self: flex-end; }
+
+  .wa-bubble {
+    padding: 8px 12px; border-radius: 12px;
+    font-size: 0.85rem; line-height: 1.45; word-break: break-word;
+  }
+  .entrante .wa-bubble { background: #fff; color: #1a1a2e; border-bottom-left-radius: 3px; }
+  .saliente .wa-bubble { background: #d9f7be; color: #1a1a2e; border-bottom-right-radius: 3px; }
+
+  .wa-msg-meta {
+    font-size: 0.68rem; color: #aaa;
+    display: flex; gap: 6px; align-items: center;
+  }
+  .saliente .wa-msg-meta { justify-content: flex-end; }
+  .wa-msg-status { font-size: 0.7rem; }
+  .wa-msg-status.leido     { color: #4fc3f7; }
+  .wa-msg-status.entregado { color: #aaa; }
+  .wa-msg-status.enviado   { color: #ccc; }
+
+  /* ── Formulario de envío ── */
+  .wa-send-form {
+    display: flex; gap: 8px; align-items: flex-end;
+    padding: 12px 16px;
+    background: #fff;
+    border-top: 1px solid #e0e0e0;
+    flex-shrink: 0;
+  }
+  .wa-send-form textarea {
+    flex: 1; padding: 9px 12px;
+    border: 1px solid #ddd; border-radius: 20px;
+    font-size: 0.85rem; resize: none; max-height: 120px;
+    font-family: inherit; outline: none;
+    background: #f5f6fa;
+  }
+  .wa-send-btn {
+    padding: 9px 18px; background: #0047ab; color: #fff;
+    border: none; border-radius: 20px; cursor: pointer;
+    font-size: 0.85rem; font-weight: 600; flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .wa-send-btn:hover { background: #003899; }
+
+  /* ── Panel lateral del chat (asignación / vinculación) ── */
+  .wa-side-panel {
+    width: 220px; flex-shrink: 0;
+    background: #fff; border-left: 1px solid #e0e0e0;
+    padding: 14px 12px;
+    display: flex; flex-direction: column; gap: 14px;
+    overflow-y: auto; font-size: 0.8rem;
+  }
+  .wa-side-panel h4 { margin: 0 0 6px; font-size: 0.78rem; color: #888; text-transform: uppercase; letter-spacing: .04em; }
+  .wa-side-panel select, .wa-side-panel input {
+    width: 100%; padding: 5px 8px;
+    border: 1px solid #ddd; border-radius: 6px; font-size: 0.8rem;
+    background: #f9f9f9; margin-bottom: 4px;
+  }
+  .wa-side-panel button {
+    width: 100%; padding: 5px 0; font-size: 0.78rem;
+    border: 1px solid #0047ab; color: #0047ab; background: #fff;
+    border-radius: 6px; cursor: pointer;
+  }
+  .wa-side-panel button:hover { background: #e8f4ff; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .wa-left { width: 100%; }
+    .wa-right, .wa-side-panel { display: none; }
+    .wa-right.visible { display: flex; position: fixed; inset: 0; z-index: 200; }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="wa-container">
+
+  <!-- ── Lista de conversaciones ── -->
+  <div class="wa-left">
+    <div class="wa-left-header" id="wa-filtros">
+      <h2>💬 WhatsApp</h2>
+      <div class="wa-search-row">
+        <input type="text" name="q" placeholder="Buscar..."
+               hx-get="/wa/rows" hx-trigger="keyup changed delay:400ms"
+               hx-target="#wa-conv-list" hx-include="#wa-filtros">
+        <select name="estado"
+                hx-get="/wa/rows" hx-trigger="change"
+                hx-target="#wa-conv-list" hx-include="#wa-filtros">
+          <option value="">Todas</option>
+          <option value="NUEVO">🔵 Nuevas</option>
+          <option value="ABIERTO">🟢 Abiertas</option>
+          <option value="RESUELTO">⚫ Resueltas</option>
+        </select>
+      </div>
+      <div class="wa-search-row" style="margin-top:6px;">
+        <select name="etapa"
+                hx-get="/wa/rows" hx-trigger="change"
+                hx-target="#wa-conv-list" hx-include="#wa-filtros">
+          <option value="">🧭 Toda etapa</option>
+          {% for et in etapas %}
+          <option value="{{ et.id }}">{{ et.emoji }} {{ et.nombre }}</option>
+          {% endfor %}
+        </select>
+        <select name="etiqueta"
+                hx-get="/wa/rows" hx-trigger="change"
+                hx-target="#wa-conv-list" hx-include="#wa-filtros">
+          <option value="">🏷️ Toda etiqueta</option>
+          {% for et in etiquetas %}
+          <option value="{{ et.id }}">{{ et.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer; font-size:0.8rem; color:#0047ab; font-weight:600;">➕ Nueva conversación</summary>
+        <form hx-post="/wa/nueva" hx-target="#wa-right" hx-swap="innerHTML"
+              style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+          <input type="text" name="numero" required placeholder="Número con código de país (ej. 528112345678)"
+                 style="padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:0.8rem; background:#f5f6fa;">
+          <input type="text" name="nombre" placeholder="Nombre (opcional)"
+                 style="padding:6px 8px; border:1px solid #ddd; border-radius:6px; font-size:0.8rem; background:#f5f6fa;">
+          <button type="submit" class="wa-btn wa-btn-primary" style="width:100%;">Iniciar conversación</button>
+          <p style="font-size:0.68rem; color:#999; margin:2px 0 0;">
+            ⚠️ Solo funciona si ese número ya te escribió antes (últimas 24h) o está en la lista de números de prueba autorizados en Meta — WhatsApp bloquea texto libre a contactos totalmente nuevos.
+          </p>
+        </form>
+      </details>
+    </div>
+
+    <div id="wa-conv-list" class="wa-conv-list"
+         hx-get="/wa/rows" hx-trigger="load, every 12s"
+         hx-include="#wa-filtros"
+         hx-swap="innerHTML">
+      <p style="padding:16px; color:#aaa; text-align:center; font-size:0.82rem;">Cargando...</p>
+    </div>
+  </div>
+
+  <!-- ── Área de chat ── -->
+  <div class="wa-right" id="wa-right">
+    <div class="wa-placeholder">
+      <span>💬</span>
+      <p>Selecciona una conversación</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Enter envía el mensaje (solo si hay texto); Shift+Enter = salto de línea
+  document.addEventListener('keydown', function(e) {
+    var ta = document.querySelector('.wa-send-form textarea');
+    if (ta && document.activeElement === ta && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (ta.value.trim()) {
+        htmx.trigger(ta.closest('form'), 'submit');
+      }
+    }
+  });
+
+  // Auto-scroll al fondo del chat cuando se carga o actualiza
+  function scrollToBottom() {
+    var msgs = document.querySelector('.wa-messages');
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  }
+  document.body.addEventListener('htmx:afterSwap', function(e) {
+    if (e.detail.target && (e.detail.target.id === 'wa-right' || e.detail.target.classList.contains('wa-messages'))) {
+      setTimeout(scrollToBottom, 50);
+    }
+  });
+</script>
+{% endblock %}

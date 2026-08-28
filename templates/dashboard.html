@@ -1,0 +1,283 @@
+{% extends "base.html" %}
+{% block title %}Torre de Control — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+<h1 class="page-title">🚨 Torre de Control</h1>
+<p class="page-subtitle">Resumen del sistema al día de hoy</p>
+
+<!-- ── KPI cards ── -->
+<div class="stats-grid" style="grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); margin-bottom:24px;">
+
+  <div class="stat-card" style="background:linear-gradient(135deg,#0047ab,#0066cc);color:white;border:none;">
+    <div class="icon">✈️</div>
+    <div class="value" style="color:white;">{{ stats.activas }}</div>
+    <div class="label" style="color:rgba(255,255,255,0.85);">Viajes Activos</div>
+  </div>
+
+  <div class="stat-card {% if stats.pagos_vencidos > 0 %}red{% else %}green{% endif %}">
+    <div class="icon">🛑</div>
+    <div class="value">{{ stats.pagos_vencidos }}</div>
+    <div class="label">Pagos Atrasados</div>
+  </div>
+
+  <div class="stat-card {% if stats.deuda_post_viaje > 0 %}yellow{% else %}green{% endif %}">
+    <div class="icon">⚠️</div>
+    <div class="value">{{ stats.deuda_post_viaje }}</div>
+    <div class="label">Deuda Post-Viaje</div>
+  </div>
+
+  <div class="stat-card {% if stats.movimientos_hoy > 0 %}blue{% else %}green{% endif %}">
+    <div class="icon">📅</div>
+    <div class="value">{{ stats.movimientos_hoy }}</div>
+    <div class="label">Movimientos Hoy</div>
+  </div>
+
+  <div class="stat-card green">
+    <div class="icon">💰</div>
+    <div class="value money" style="font-size:1.3rem;">${{ "{:,.0f}".format(stats.cobrado_mes_mxn) }}</div>
+    <div class="label">Cobrado MXN ({{ caja.mes }})</div>
+  </div>
+
+  <div class="stat-card blue">
+    <div class="icon">💵</div>
+    <div class="value money" style="font-size:1.3rem;">${{ "{:,.0f}".format(stats.saldo_pendiente) }}</div>
+    <div class="label">Saldo Pendiente MXN</div>
+  </div>
+
+</div>
+
+<!-- ── Selector de período (caja) ── -->
+<div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+  <span style="font-size:0.8rem; color:var(--text2); font-weight:600;">📅 Período de caja:</span>
+  <form method="get" action="/dashboard"
+        style="display:flex; gap:8px; align-items:center;">
+    <select name="mes" class="field-select" style="width:130px; font-size:0.82rem; padding:4px 8px;"
+            onchange="this.form.submit()">
+      {% for m, nombre in [('01','Enero'),('02','Febrero'),('03','Marzo'),('04','Abril'),
+                            ('05','Mayo'),('06','Junio'),('07','Julio'),('08','Agosto'),
+                            ('09','Septiembre'),('10','Octubre'),('11','Noviembre'),('12','Diciembre')] %}
+      <option value="{{ m }}" {% if mes_sel == m %}selected{% endif %}>{{ nombre }}</option>
+      {% endfor %}
+    </select>
+    <select name="anio" class="field-select" style="width:80px; font-size:0.82rem; padding:4px 8px;"
+            onchange="this.form.submit()">
+      {% for a in anios_disp %}
+      <option value="{{ a }}" {% if anio_sel == a %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  {% if not es_mes_actual %}
+  <a href="/dashboard" style="font-size:0.78rem; color:var(--primary);">← Mes actual</a>
+  {% endif %}
+</div>
+
+<!-- ── Caja Real del mes ── -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+
+  <div class="card">
+    <div class="card-header">🇲🇽 Caja Real {{ caja.mes }} — MXN</div>
+    <div style="padding:16px 20px; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+        <span style="color:var(--text2);">📥 Entradas</span>
+        <strong class="money-positive">${{ "{:,.2f}".format(caja.ing_mxn) }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+        <span style="color:var(--text2);">📤 Salidas</span>
+        <strong class="money-negative">${{ "{:,.2f}".format(caja.egr_mxn) }}</strong>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:8px; display:flex; justify-content:space-between; font-size:1rem; font-weight:700;">
+        <span>💰 Balance</span>
+        <span class="{{ 'money-positive' if caja.bal_mxn >= 0 else 'money-negative' }}">${{ "{:,.2f}".format(caja.bal_mxn) }} MXN</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🇺🇸 Caja Real {{ caja.mes }} — USD</div>
+    <div style="padding:16px 20px; display:flex; flex-direction:column; gap:8px;">
+      <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+        <span style="color:var(--text2);">📥 Entradas</span>
+        <strong class="money-positive">${{ "{:,.2f}".format(caja.ing_usd) }}</strong>
+      </div>
+      <div style="display:flex; justify-content:space-between; font-size:0.9rem;">
+        <span style="color:var(--text2);">📤 Salidas</span>
+        <strong class="money-negative">${{ "{:,.2f}".format(caja.egr_usd) }}</strong>
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:8px; display:flex; justify-content:space-between; font-size:1rem; font-weight:700;">
+        <span>💰 Balance</span>
+        <span class="{{ 'money-positive' if caja.bal_usd >= 0 else 'money-negative' }}">${{ "{:,.2f}".format(caja.bal_usd) }} USD</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Gráficas ── -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+
+  <div class="card">
+    <div class="card-header">📈 Ingresos vs Egresos MXN — Últimos 6 meses</div>
+    <div style="padding:16px 20px;">
+      <canvas id="chart-tendencia" style="max-height:260px;"></canvas>
+      <p id="no-tend" style="display:none; text-align:center; color:var(--text2); font-size:0.85rem; padding:20px 0;">
+        Sin movimientos registrados en este período.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header">🏆 Top Destinos por Utilidad (MXN)</div>
+    <div style="padding:16px 20px;">
+      <canvas id="chart-destinos" style="max-height:260px;"></canvas>
+      <p id="no-dest" style="display:none; text-align:center; color:var(--text2); font-size:0.85rem; padding:20px 0;">
+        Sin datos de destinos disponibles.
+      </p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Próximas salidas ── -->
+{% if proximas %}
+<div class="card">
+  <div class="card-header">✈️ Próximas salidas (30 días)</div>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Cliente</th>
+        <th>Destino</th>
+        <th>Salida</th>
+        <th>Saldo</th>
+        <th>Estado</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in proximas %}
+      <tr>
+        <td><a href="/bitacora/{{ r.id_reserva }}" style="font-weight:600; color:var(--primary);">#{{ r.id_reserva }}</a></td>
+        <td>{{ r.nombre }}</td>
+        <td>{{ r.destino }}</td>
+        <td>{{ r.fecha_salida }}</td>
+        <td class="money {% if r.saldo > 0.5 %}money-negative{% else %}money-positive{% endif %}">
+          ${{ "{:,.0f}".format(r.saldo) }} {{ r.moneda }}
+        </td>
+        <td><span class="badge badge-green">{{ r.estado }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="card-header">✈️ Próximas salidas (30 días)</div>
+  <div style="padding:24px; text-align:center; color:var(--text2);">Sin salidas programadas en los próximos 30 días.</div>
+</div>
+{% endif %}
+
+<!-- ── Chart.js ── -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const tend = {{ chart_tendencia | safe }};
+  const dest = {{ chart_destinos | safe }};
+
+  // ── Gráfica 1: Ingresos vs Egresos ──────────────────────────────────────
+  if (tend.labels && tend.labels.length > 0) {
+    new Chart(document.getElementById('chart-tendencia'), {
+      type: 'bar',
+      data: {
+        labels: tend.labels,
+        datasets: [
+          {
+            label: 'Ingresos',
+            data: tend.ingresos,
+            backgroundColor: 'rgba(39,174,96,0.85)',
+            borderRadius: 4,
+            borderSkipped: false,
+          },
+          {
+            label: 'Egresos',
+            data: tend.egresos,
+            backgroundColor: 'rgba(231,76,60,0.8)',
+            borderRadius: 4,
+            borderSkipped: false,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top', labels: { font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: ctx => ' $' + ctx.parsed.y.toLocaleString('es-MX', {minimumFractionDigits: 0}) + ' MXN'
+            }
+          }
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+          y: {
+            ticks: {
+              font: { size: 11 },
+              callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+            }
+          }
+        }
+      }
+    });
+  } else {
+    document.getElementById('chart-tendencia').style.display = 'none';
+    document.getElementById('no-tend').style.display = 'block';
+  }
+
+  // ── Gráfica 2: Top Destinos ──────────────────────────────────────────────
+  if (dest.labels && dest.labels.length > 0) {
+    new Chart(document.getElementById('chart-destinos'), {
+      type: 'bar',
+      data: {
+        labels: dest.labels,
+        datasets: [{
+          label: 'Utilidad MXN',
+          data: dest.valores,
+          backgroundColor: 'rgba(0,71,171,0.8)',
+          borderRadius: 4,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const i = ctx.dataIndex;
+                return [
+                  ' Utilidad: $' + ctx.parsed.x.toLocaleString('es-MX', {minimumFractionDigits: 0}) + ' MXN',
+                  ' Viajes: ' + dest.viajes[i]
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              font: { size: 11 },
+              callback: v => '$' + (v >= 1000 ? (v/1000).toFixed(0) + 'k' : v)
+            }
+          },
+          y: { ticks: { font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  } else {
+    document.getElementById('chart-destinos').style.display = 'none';
+    document.getElementById('no-dest').style.display = 'block';
+  }
+})();
+</script>
+
+{% endblock %}
