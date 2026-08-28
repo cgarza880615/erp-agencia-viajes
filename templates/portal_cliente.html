@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>{% if encontrado %}Tu viaje a {{ reserva.destino }}{% else %}Portal no encontrado{% endif %} — Tu Agencia de Viajes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --azul: #0066cc;
+    --azul-oscuro: #004a99;
+    --azul-wash: #eaf2ff;
+    --verde: #16a34a;
+    --verde-wash: #e9f8ee;
+    --ambar: #c97a2b;
+    --ambar-wash: #fbf0e4;
+    --bg: #f4f6f7;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --ink: #1a202c;
+    --ink-soft: #718096;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.55;
+    display: flex;
+    justify-content: center;
+    padding: 28px 14px 60px;
+  }
+  main { width: 100%; max-width: 480px; }
+  h1, h2 { font-family: "Fraunces", Georgia, serif; }
+  .banner {
+    background: linear-gradient(135deg, var(--azul), var(--azul-oscuro));
+    color: white;
+    border-radius: 16px;
+    padding: 24px 22px;
+    margin-bottom: 16px;
+  }
+  .banner .eyebrow { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+  .banner h1 { font-size: 1.5rem; margin: 6px 0 4px; }
+  .banner .fechas { font-size: 0.9rem; opacity: 0.92; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 14px;
+  }
+  .card h2 { font-size: 1.02rem; margin: 0 0 12px; color: var(--ink); }
+  .saldo-monto { font-size: 2rem; font-weight: 700; font-family: "Fraunces", serif; }
+  .saldo-monto.pagado { color: var(--verde); }
+  .saldo-monto.pendiente { color: var(--ambar); }
+  .saldo-sub { color: var(--ink-soft); font-size: 0.85rem; margin-top: 4px; }
+  .proximo-pago {
+    background: var(--ambar-wash);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    font-size: 0.88rem;
+  }
+  .proximo-pago strong { display: block; margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); padding: 6px 4px; border-bottom: 1px solid var(--border); }
+  td { padding: 8px 4px; border-bottom: 1px solid var(--border); }
+  tr:last-child td { border-bottom: none; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; }
+  .chip.ok { background: var(--verde-wash); color: var(--verde); }
+  .chip.warn { background: var(--ambar-wash); color: var(--ambar); }
+  .footer-nota { text-align: center; color: var(--ink-soft); font-size: 0.78rem; margin-top: 20px; }
+  .not-found { text-align: center; padding: 60px 20px; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<main>
+{% if not encontrado %}
+  <div class="not-found">
+    <h1>Portal no encontrado</h1>
+    <p>Este link no es válido o ya expiró. Si crees que es un error, contacta directamente a tu agencia.</p>
+  </div>
+{% elif cancelado %}
+  <div class="not-found">
+    <h1>Viaje no activo</h1>
+    <p>Este itinerario a {{ reserva.destino }} ya no está activo. Si tienes dudas, contacta directamente a tu agencia.</p>
+  </div>
+{% else %}
+  <div class="banner">
+    <div class="eyebrow">Tu viaje</div>
+    <h1>{{ reserva.destino }}</h1>
+    <div class="fechas">{{ reserva.fecha_salida }} → {{ reserva.fecha_regreso }}</div>
+  </div>
+
+  <div class="card">
+    <h2>Saldo</h2>
+    {% if saldo.saldo_pendiente > 0.5 %}
+      <div class="saldo-monto pendiente">{{ saldo.saldo_pendiente | moneda(reserva.moneda) }}</div>
+      <div class="saldo-sub">pendiente por pagar de {{ saldo.venta_total | moneda(reserva.moneda) }}</div>
+    {% else %}
+      <div class="saldo-monto pagado">Liquidado ✓</div>
+      <div class="saldo-sub">Ya pagaste el total de tu viaje: {{ saldo.venta_total | moneda(reserva.moneda) }}</div>
+    {% endif %}
+
+    {% if proximo_pago %}
+    <div class="proximo-pago">
+      <strong>Próximo pago programado</strong>
+      {{ proximo_pago.fecha_programada }} — {{ (proximo_pago.monto_esperado - (proximo_pago.monto_pagado or 0)) | moneda(reserva.moneda) }}
+    </div>
+    {% endif %}
+  </div>
+
+  {% if plan %}
+  <div class="card">
+    <h2>Plan de pagos</h2>
+    <table>
+      <tr><th>Fecha</th><th>Monto</th><th>Estado</th></tr>
+      {% for p in plan %}
+      <tr>
+        <td>{{ p.fecha_programada }}</td>
+        <td>{{ p.monto_esperado | moneda(reserva.moneda) }}</td>
+        <td>
+          {% if p.estado == 'PAGADO' %}<span class="chip ok">Pagado</span>
+          {% elif p.estado == 'PARCIAL' %}<span class="chip warn">Parcial</span>
+          {% else %}<span class="chip warn">Pendiente</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  {% if pagos %}
+  <div class="card">
+    <h2>Historial de pagos</h2>
+    <table>
+      <tr><th>Fecha</th><th>Monto</th><th>Método</th></tr>
+      {% for m in pagos %}
+      <tr>
+        <td>{{ m.fecha_pago }}</td>
+        <td>{{ m.monto | moneda(reserva.moneda) }}</td>
+        <td>{{ m.metodo_pago }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <p class="footer-nota">Tu Agencia de Viajes · Este link es personal, no lo compartas.</p>
+{% endif %}
+</main>
+</body>
+</html>

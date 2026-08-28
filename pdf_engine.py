@@ -11,6 +11,34 @@ _MESES_ES = ["", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
              "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
 
 
+def _dibujar_qr_portal(c, x, y, size, url, texto="Consulta en línea", arriba=True):
+    """Dibuja un código QR (esquina inferior izquierda en x,y) que apunta al portal del
+    cliente, más un texto corto junto a él. Tanto el QR como el texto quedan como link
+    tocable (c.linkURL) — así funciona igual si el cliente ve el PDF desde el mismo
+    celular y no puede escanear su propia pantalla. No requiere ninguna librería nueva:
+    el soporte de QR ya viene incluido en ReportLab."""
+    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from reportlab.graphics.shapes import Drawing
+    from reportlab.graphics import renderPDF
+    widget = QrCodeWidget(url)
+    b = widget.getBounds()
+    w_qr = b[2] - b[0]
+    h_qr = b[3] - b[1]
+    d = Drawing(size, size, transform=[size / w_qr, 0, 0, size / h_qr, 0, 0])
+    d.add(widget)
+    renderPDF.draw(d, c, x, y)
+    c.linkURL(url, (x, y, x + size, y + size), relative=0)
+
+    c.saveState()
+    c.setFillColor(HexColor("#0066cc"))
+    c.setFont("Helvetica-Bold", 6.5)
+    ty = y + size + 5 if arriba else y - 6
+    c.drawCentredString(x + size / 2, ty, texto)
+    tw = c.stringWidth(texto, "Helvetica-Bold", 6.5)
+    c.linkURL(url, (x + size / 2 - tw / 2 - 3, ty - 1.5, x + size / 2 + tw / 2 + 3, ty + 7), relative=0)
+    c.restoreState()
+
+
 def _fecha_larga_es(fecha_str, hora_str=None):
     """'2026-08-08' + '16:00' -> 'Domingo 8 de agosto de 2026 a las 16:00 horas'"""
     try:
@@ -23,7 +51,7 @@ def _fecha_larga_es(fecha_str, hora_str=None):
     return texto
 
 
-def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cliente, monto, moneda, fecha_pago, metodo_pago, concepto, saldo_anterior, saldo_actual, operador, id_reserva, destino, logo_path):
+def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cliente, monto, moneda, fecha_pago, metodo_pago, concepto, saldo_anterior, saldo_actual, operador, id_reserva, destino, logo_path, portal_url=None):
     """Genera recibo PDF con DOS copias (Cliente y Control) con mejor diseño"""
 
     pdf_buffer = BytesIO()
@@ -54,7 +82,7 @@ def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cl
         c.setFillColor(negro)
         return y_start - 118
 
-    def dibujar_recibo(y_inicio, tipo_copia):
+    def dibujar_recibo(y_inicio, tipo_copia, portal_url=None):
         y = y_inicio
 
         y = dibujar_encabezado(y)
@@ -131,12 +159,17 @@ def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cl
 
         c.setFont("Helvetica-Oblique", 8)
         c.drawString(margen, y, "Sello / Firma del Operador")
+        if tipo_copia == "CLIENTE" and portal_url:
+            qr_size = 32
+            qr_x = margen + linea_ancho - qr_size
+            qr_y = y - qr_size + 7
+            _dibujar_qr_portal(c, qr_x, qr_y, qr_size, portal_url, arriba=False)
         y -= 35
 
         return y
 
     y_cliente = height - 20
-    y_cliente = dibujar_recibo(y_cliente, "CLIENTE")
+    y_cliente = dibujar_recibo(y_cliente, "CLIENTE", portal_url)
 
     y_cliente -= 10
     c.setLineWidth(1)
@@ -622,16 +655,22 @@ def generar_itinerario_pdf(exp, nombre_cliente, telefono_cliente, pasajeros_df, 
         if line:
             check_page(); c.drawString(m + 5, y, line); y -= 11
 
+    if portal_url:
+        qr_size = 52
+        qr_x = w - m - qr_size
+        qr_y = 52
+        _dibujar_qr_portal(c, qr_x, qr_y, qr_size, portal_url)
+
     c.setStrokeColor(HexColor("#cccccc")); c.setLineWidth(0.5)
     c.line(m, 45, w - m, 45)
     c.setFillColor(HexColor("#999999")); c.setFont("Helvetica-Oblique", 7)
-    c.drawCentredString(w/2, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
+    c.drawString(m, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
 
     c.save()
     return buf.getvalue()
 
 
-def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_df, logo_path):
+def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_df, logo_path, portal_url=None):
     """Itinerario 'boutique' orientado al cliente final: banner de portada, timeline de fechas y
     tarjetas de color por sección. Sin localizador de mayorista ni datos financieros."""
     buf = BytesIO()
@@ -862,16 +901,22 @@ def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_
         c.drawString(m + 5, y, line)
         y -= 11.5
 
+    if portal_url:
+        qr_size = 52
+        qr_x = W - m - qr_size
+        qr_y = 52
+        _dibujar_qr_portal(c, qr_x, qr_y, qr_size, portal_url)
+
     c.setStrokeColor(HexColor("#cccccc")); c.setLineWidth(0.5)
     c.line(m, 45, W - m, 45)
     c.setFillColor(HexColor("#999999")); c.setFont("Helvetica-Oblique", 7)
-    c.drawCentredString(W / 2, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
+    c.drawString(m, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
 
     c.save()
     return buf.getvalue()
 
 
-def generar_estado_cuenta_pdf(exp, nombre_cliente, telefono_cliente, email_cliente, movimientos_df, plan_df, logo_path):
+def generar_estado_cuenta_pdf(exp, nombre_cliente, telefono_cliente, email_cliente, movimientos_df, plan_df, logo_path, portal_url=None):
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
     w, h = letter
@@ -1045,10 +1090,16 @@ def generar_estado_cuenta_pdf(exp, nombre_cliente, telefono_cliente, email_clien
     c.setFillColor(HexColor("#666666")); c.setFont("Helvetica", 8)
     c.drawCentredString(w/2, y - 8, "Para cualquier duda sobre su estado de cuenta, contáctenos al 55 0000 0000")
 
+    if portal_url:
+        qr_size = 52
+        qr_x = w - m - qr_size
+        qr_y = 52
+        _dibujar_qr_portal(c, qr_x, qr_y, qr_size, portal_url)
+
     c.setStrokeColor(HexColor("#cccccc")); c.setLineWidth(0.5)
     c.line(m, 45, w - m, 45)
     c.setFillColor(HexColor("#999999")); c.setFont("Helvetica-Oblique", 7)
-    c.drawCentredString(w/2, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
+    c.drawString(m, 33, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  Tel: 55 0000 0000  ·  {folio}")
 
     c.save()
     return buf.getvalue()

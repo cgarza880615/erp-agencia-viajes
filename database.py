@@ -216,6 +216,11 @@ def verificar_tablas():
     except Exception as e:
         if "duplicate column" not in str(e).lower(): logging.error(f"ALTER reservas usuario_creador: {e}")
 
+    try: cursor.execute("ALTER TABLE reservas ADD COLUMN token_portal TEXT")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower(): logging.error(f"ALTER reservas token_portal: {e}")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_reservas_token_portal ON reservas(token_portal)")
+
     try: cursor.execute("ALTER TABLE usuarios ADD COLUMN ultima_cambio_password TEXT")
     except Exception as e:
         if "duplicate column" not in str(e).lower() and "no such table" not in str(e).lower():
@@ -960,6 +965,35 @@ def upsert_catalogo_equipaje(texto):
     conn.commit()
     conn.close()
     return texto
+
+
+def obtener_token_portal(id_reserva):
+    """Devuelve el token del portal del cliente para esta reserva — lo genera y lo
+    guarda la primera vez que se pide (ej. al generar un PDF), lo reutiliza después."""
+    import secrets as _secrets
+    df = obtener_datos("SELECT token_portal FROM reservas WHERE id_reserva=?", (id_reserva,))
+    if df.empty:
+        return None
+    token = df.iloc[0]["token_portal"]
+    if token and str(token).strip() and str(token) != "nan":
+        return token
+    token = _secrets.token_urlsafe(24)
+    ejecutar_comando("UPDATE reservas SET token_portal=? WHERE id_reserva=?", (token, id_reserva))
+    return token
+
+
+def obtener_reserva_por_token_portal(token):
+    """Busca la reserva asociada a un token del portal del cliente. Devuelve un dict o None."""
+    if not token:
+        return None
+    df = obtener_datos(
+        "SELECT r.*, c.nombre as nombre_cliente FROM reservas r "
+        "JOIN clientes c ON r.id_cliente=c.id_cliente WHERE r.token_portal=?",
+        (token,)
+    )
+    if df.empty:
+        return None
+    return df.iloc[0].to_dict()
 
 
 def calcular_saldo_real(id_reserva):

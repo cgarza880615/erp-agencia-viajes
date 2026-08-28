@@ -27,7 +27,8 @@ from database import (
     get_catalogo_equipaje, get_catalogo_destinos,
     upsert_catalogo_hotel, upsert_catalogo_aerolinea, upsert_catalogo_mayorista,
     upsert_catalogo_proveedor_traslados, upsert_catalogo_proveedor_tours, upsert_catalogo_proveedor_adicionales,
-    upsert_catalogo_equipaje, upsert_catalogo_destino
+    upsert_catalogo_equipaje, upsert_catalogo_destino,
+    obtener_token_portal, obtener_reserva_por_token_portal
 )
 from wa import wa_router, _contar_wa_nuevas
 from dotenv import load_dotenv
@@ -1980,6 +1981,8 @@ async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
     metodo = (mov.get("metodo_pago") or
               next(iter(_re_pdf.findall(r'\[([^\]]+)\]', str(mov.get("concepto") or ""))), "Desconocido"))
     folio = f"AGP-{str(mov['fecha_pago'])[:4]}-{int(id_mov):04d}"
+    token = obtener_token_portal(id_reserva)
+    portal_url = str(request.base_url) + f"portal/{token}" if token else None
     pdf = _gen_recibo(
         id_movimiento=id_mov,
         nombre_cliente=res["nombre"],
@@ -1995,7 +1998,8 @@ async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
         operador=usuario_activo(request),
         id_reserva=id_reserva,
         destino=res["destino"],
-        logo_path=LOGO_PATH
+        logo_path=LOGO_PATH,
+        portal_url=portal_url
     )
     return FastAPIResponse(content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename={folio}.pdf"})
@@ -2646,7 +2650,9 @@ async def pdf_itinerario_cliente(request: Request, id_reserva: int):
     exp = df_r.iloc[0].to_dict()
     df_hab    = obtener_datos("SELECT tipo_habitacion, num_personas, hora_checkin, descripcion FROM habitaciones_reserva WHERE id_reserva=? ORDER BY id_habitacion", (id_reserva,))
     df_extras = obtener_datos("SELECT descripcion FROM extras_viaje WHERE id_reserva=? ORDER BY fecha_registro", (id_reserva,))
-    pdf = generar_itinerario_cliente_pdf(exp, exp["nombre_cliente"], df_hab, df_extras, LOGO_PATH)
+    token = obtener_token_portal(id_reserva)
+    portal_url = str(request.base_url) + f"portal/{token}" if token else None
+    pdf = generar_itinerario_cliente_pdf(exp, exp["nombre_cliente"], df_hab, df_extras, LOGO_PATH, portal_url)
     return FastAPIResponse(content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=Itinerario_Cliente_{id_reserva}_{exp['destino'].replace(' ','_')}.pdf"})
 
@@ -2668,9 +2674,48 @@ async def pdf_estado_cuenta(request: Request, id_reserva: int):
         "FROM flujo_caja WHERE id_reserva=? ORDER BY id_movimiento ASC", (id_reserva,)
     )
     df_plan = obtener_datos("SELECT numero_pago, monto_esperado, fecha_programada, estado FROM plan_pagos WHERE id_reserva=? ORDER BY numero_pago", (id_reserva,))
-    pdf = generar_estado_cuenta_pdf(exp, exp["nombre_cliente"], exp["telefono"], exp.get("email",""), df_movs, df_plan, LOGO_PATH)
+    token = obtener_token_portal(id_reserva)
+    portal_url = str(request.base_url) + f"portal/{token}" if token else None
+    pdf = generar_estado_cuenta_pdf(exp, exp["nombre_cliente"], exp["telefono"], exp.get("email",""), df_movs, df_plan, LOGO_PATH, portal_url)
     return FastAPIResponse(content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=EstadoCuenta_{id_reserva}_{exp['nombre_cliente'].replace(' ','_')}.pdf"})
+
+
+# ─── Portal del cliente (público, sin login — protegido solo por el token) ────
+
+@app.get("/portal/{token}", response_class=HTMLResponse)
+async def portal_cliente(request: Request, token: str):
+    exp = obtener_reserva_por_token_portal(token)
+    if not exp:
+        return templates.TemplateResponse(request, "portal_cliente.html", {"encontrado": False}, status_code=404)
+
+    if exp.get("estado") in ("CANCELADO", "INCOBRABLE"):
+        return templates.TemplateResponse(request, "portal_cliente.html", {
+            "encontrado": True, "cancelado": True, "reserva": exp,
+        })
+
+    saldo = calcular_saldo_real(exp["id_reserva"])
+    df_plan = obtener_datos(
+        "SELECT numero_pago, monto_esperado, monto_pagado, fecha_programada, estado "
+        "FROM plan_pagos WHERE id_reserva=? ORDER BY numero_pago",
+        (exp["id_reserva"],)
+    )
+    df_pagos = obtener_datos(
+        "SELECT fecha_pago, monto, metodo_pago FROM flujo_caja "
+        "WHERE id_reserva=? AND tipo_movimiento='INGRESO' AND estado='ACTIVO' ORDER BY fecha_pago DESC",
+        (exp["id_reserva"],)
+    )
+    proximo = df_plan[df_plan["estado"].isin(["PENDIENTE", "PARCIAL"])].sort_values("fecha_programada")
+    proximo_pago = proximo.iloc[0].to_dict() if not proximo.empty else None
+
+    return templates.TemplateResponse(request, "portal_cliente.html", {
+        "encontrado": True,
+        "reserva": exp,
+        "saldo": saldo,
+        "plan": df_plan.to_dict("records"),
+        "pagos": df_pagos.to_dict("records"),
+        "proximo_pago": proximo_pago,
+    })
 
 
 @app.post("/bitacora/{id_reserva}/aplicar-prorrateo")
