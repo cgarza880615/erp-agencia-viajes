@@ -355,6 +355,58 @@
   </div>
 </div>
 
+{% if not cot %}
+<!-- Vuelos por tramo y Hoteles múltiples (opcional, solo al crear — editar aquí
+     reemplazaría lo agregado desde el detalle; usa las secciones "✈️ Vuelos" /
+     "🏨 Hoteles" en el detalle de la cotización para modificar una ya existente) -->
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🛫 Vuelos por tramo (opcional)</div>
+  <div class="card-body">
+    <p style="font-size:0.8rem; color:var(--text2); margin:0 0 12px;">
+      Solo si el viaje tiene más de un vuelo (escalas, multi-ciudad). El costo/cobro de vuelo sigue siendo el total de arriba.
+    </p>
+    <div class="form-grid" style="margin-bottom:12px;">
+      <div class="form-field" style="max-width:220px;">
+        <label class="field-label">Tipo de vuelo</label>
+        <select class="field-select" name="tipo_vuelo">
+          <option value="REDONDO" selected>🔁 Redondo</option>
+          <option value="SENCILLO">➡️ Sencillo</option>
+        </select>
+      </div>
+      <div class="form-field" style="max-width:160px;">
+        <label class="field-label">Núm. de tramos</label>
+        <input class="field-input" type="number" id="vue-n" name="vue_n" min="0" max="10" value="0" oninput="vueGenerarFilas()">
+      </div>
+    </div>
+    <table style="width:100%;" id="vue-tabla">
+      <thead>
+        <tr><th style="width:36px;">#</th><th>Aerolínea</th><th>Núm. vuelo</th><th>Origen</th><th>Destino</th><th>Fecha</th><th>Hora</th><th>Localizador</th></tr>
+      </thead>
+      <tbody id="vue-filas"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">🏩 Hoteles múltiples (opcional)</div>
+  <div class="card-body">
+    <p style="font-size:0.8rem; color:var(--text2); margin:0 0 12px;">
+      Solo si el viaje visita más de un hotel/ciudad. El costo/cobro de hotel sigue siendo el total capturado arriba.
+    </p>
+    <div class="form-field" style="max-width:160px; margin-bottom:12px;">
+      <label class="field-label">Núm. de hoteles</label>
+      <input class="field-input" type="number" id="hmu-n" name="hmu_n" min="0" max="10" value="0" oninput="hmuGenerarFilas()">
+    </div>
+    <table style="width:100%;" id="hmu-tabla">
+      <thead>
+        <tr><th style="width:36px;">#</th><th>Ciudad/Destino</th><th>Nombre del hotel</th><th>Check-in</th><th>Check-out</th><th>Localizador</th></tr>
+      </thead>
+      <tbody id="hmu-filas"></tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
 <!-- Habitaciones -->
 <div class="card" style="margin-bottom:16px;">
   <div class="card-header">🛏️ Habitaciones</div>
@@ -611,6 +663,50 @@ previewPlan();
 
   window.habGenerarFilas = habGenerarFilas;
   habGenerarFilas();
+})();
+
+(function() {
+  if (!document.getElementById('vue-filas')) return;
+  function vueGenerarFilas() {
+    const n = parseInt(document.getElementById('vue-n').value) || 0;
+    const tbody = document.getElementById('vue-filas');
+    tbody.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="text" name="vue_aerolinea_${i}" placeholder="Ej. Avianca"></td>
+        <td><input class="field-input" type="text" name="vue_numero_${i}" placeholder="Ej. AV456"></td>
+        <td><input class="field-input" type="text" name="vue_origen_${i}" placeholder="Ej. Monterrey"></td>
+        <td><input class="field-input" type="text" name="vue_destino_${i}" placeholder="Ej. Bogotá"></td>
+        <td><input class="field-input" type="date" name="vue_fecha_${i}"></td>
+        <td><input class="field-input" type="time" name="vue_hora_${i}"></td>
+        <td><input class="field-input" type="text" name="vue_localizador_${i}"></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  window.vueGenerarFilas = vueGenerarFilas;
+})();
+
+(function() {
+  if (!document.getElementById('hmu-filas')) return;
+  function hmuGenerarFilas() {
+    const n = parseInt(document.getElementById('hmu-n').value) || 0;
+    const tbody = document.getElementById('hmu-filas');
+    tbody.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
+        <td><input class="field-input" type="text" name="hmu_ciudad_${i}" placeholder="Ej. Cartagena"></td>
+        <td><input class="field-input" type="text" name="hmu_nombre_${i}" placeholder="Ej. Hotel Caribe"></td>
+        <td><input class="field-input" type="date" name="hmu_checkin_${i}"></td>
+        <td><input class="field-input" type="date" name="hmu_checkout_${i}"></td>
+        <td><input class="field-input" type="text" name="hmu_localizador_${i}"></td>`;
+      tbody.appendChild(tr);
+    }
+  }
+  window.hmuGenerarFilas = hmuGenerarFilas;
 })();
 </script>
 {% endblock %}

@@ -1,0 +1,99 @@
+<div id="seccion-vuelos-cot">
+<div class="card" style="margin-bottom:16px;">
+  <div class="card-header">✈️ Vuelos</div>
+  <div class="card-body" style="padding-bottom:0;">
+
+    {% if cot_activa %}
+    <div class="form-field" style="max-width:280px; margin-bottom:14px;">
+      <label class="field-label">Tipo de vuelo</label>
+      <select class="field-select" id="tipo-vuelo-{{ id_cot }}"
+              hx-post="/cotizaciones/{{ id_cot }}/tipo_vuelo"
+              hx-trigger="change" hx-target="#seccion-vuelos-cot" hx-swap="outerHTML"
+              name="tipo_vuelo">
+        <option value="REDONDO" {% if tipo_vuelo != 'SENCILLO' %}selected{% endif %}>🔁 Redondo</option>
+        <option value="SENCILLO" {% if tipo_vuelo == 'SENCILLO' %}selected{% endif %}>➡️ Sencillo</option>
+      </select>
+    </div>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.85rem; margin-bottom:10px;">Tipo de vuelo: <strong>{{ 'Sencillo' if tipo_vuelo == 'SENCILLO' else 'Redondo' }}</strong></p>
+    {% endif %}
+
+    {% if vuelos %}
+    <table style="width:100%; margin-bottom:16px;">
+      <thead>
+        <tr><th>#</th><th>Aerolínea</th><th>Vuelo</th><th>Origen → Destino</th><th>Fecha</th><th>Hora</th><th>Localizador</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for v in vuelos %}
+        <tr>
+          <td>{{ v.numero_tramo }}</td>
+          <td>{{ v.aerolinea }}</td>
+          <td>{{ v.numero_vuelo or '—' }}</td>
+          <td>{{ v.origen or '—' }} → {{ v.destino or '—' }}</td>
+          <td>{{ v.fecha or '—' }}</td>
+          <td>{{ v.hora or '—' }}</td>
+          <td>{{ v.localizador or '—' }}</td>
+          <td>
+            {% if cot_activa %}
+            <button type="button" class="btn-icon-danger"
+                    hx-post="/cotizaciones/{{ id_cot }}/vuelos/{{ v.id_vuelo }}/eliminar"
+                    hx-target="#seccion-vuelos-cot" hx-swap="outerHTML"
+                    hx-confirm="¿Eliminar este tramo de vuelo?">✕</button>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin vuelos registrados. El costo/cobro de vuelo sigue siendo el total capturado en el itinerario — esta lista es solo el detalle de tramos para el PDF.</p>
+    {% endif %}
+
+    {% if cot_activa %}
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
+        + Agregar tramo de vuelo
+      </summary>
+      <form hx-post="/cotizaciones/{{ id_cot }}/vuelos/agregar"
+            hx-target="#seccion-vuelos-cot" hx-swap="outerHTML"
+            style="margin-top:12px;">
+        <div class="form-grid">
+          <div class="form-field">
+            <label class="field-label">Aerolínea *</label>
+            <input class="field-input" type="text" name="aerolinea" required placeholder="Ej: Avianca">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Número de vuelo</label>
+            <input class="field-input" type="text" name="numero_vuelo" placeholder="Ej: AV456">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Origen</label>
+            <input class="field-input" type="text" name="origen" placeholder="Ej: Monterrey">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Destino</label>
+            <input class="field-input" type="text" name="destino" placeholder="Ej: Bogotá">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Fecha</label>
+            <input class="field-input" type="date" name="fecha">
+          </div>
+          <div class="form-field">
+            <label class="field-label">Hora</label>
+            <input class="field-input" type="time" name="hora">
+          </div>
+          <div class="form-field" style="grid-column:span 2;">
+            <label class="field-label">Localizador / PNR</label>
+            <input class="field-input" type="text" name="localizador">
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" style="font-size:0.875rem;">💾 Agregar tramo</button>
+        </div>
+      </form>
+    </details>
+    {% endif %}
+
+  </div>
+</div>
+</div>

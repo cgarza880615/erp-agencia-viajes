@@ -175,6 +175,37 @@
 </div>
 {% endif %}
 
+<!-- ── Check-ins de vuelo pendientes ── -->
+{% if checkins_pendientes %}
+<div class="card" style="margin-top:16px;">
+  <div class="card-header" style="color:var(--warning);">🛫 Check-in de vuelo pendiente ({{ checkins_pendientes|length }})</div>
+  <table>
+    <thead>
+      <tr>
+        <th>Itinerario</th><th>Cliente</th><th>Tramo</th><th>Aerolínea</th><th>Origen → Destino</th><th>Fecha</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in checkins_pendientes %}
+      <tr>
+        <td><a href="/bitacora/{{ v.id_reserva }}" style="font-weight:600; color:var(--primary);">#{{ v.id_reserva }}</a></td>
+        <td>{{ v.nombre_cliente }}</td>
+        <td>#{{ v.numero_tramo }}</td>
+        <td>{{ v.aerolinea }} {{ v.numero_vuelo or '' }}</td>
+        <td>{{ v.origen or '—' }} → {{ v.destino or '—' }}</td>
+        <td>{{ v.fecha }} {{ v.hora or '' }}</td>
+        <td>
+          <button type="button" class="badge badge-warn" style="border:none; cursor:pointer;"
+                  hx-post="/bitacora/{{ v.id_reserva }}/vuelos/{{ v.id_vuelo }}/checkin"
+                  hx-target="closest tr" hx-swap="outerHTML swap:0.3s">⏳ Marcar hecho</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
 <!-- ── Chart.js ── -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script>

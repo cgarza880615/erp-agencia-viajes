@@ -208,6 +208,23 @@ def verificar_tablas():
     cursor.execute('''CREATE TABLE IF NOT EXISTS habitaciones_reserva (id_habitacion INTEGER PRIMARY KEY AUTOINCREMENT, id_reserva INTEGER, tipo_habitacion TEXT NOT NULL, num_personas INTEGER NOT NULL DEFAULT 1, hora_checkin TEXT DEFAULT '15:00', descripcion TEXT, FOREIGN KEY (id_reserva) REFERENCES reservas(id_reserva))''')
     cursor.execute('''CREATE TABLE IF NOT EXISTS habitaciones_cotizacion (id_habitacion INTEGER PRIMARY KEY AUTOINCREMENT, id_cotizacion INTEGER, tipo_habitacion TEXT NOT NULL, num_personas INTEGER NOT NULL DEFAULT 1, hora_checkin TEXT DEFAULT '15:00', descripcion TEXT, FOREIGN KEY (id_cotizacion) REFERENCES cotizaciones(id_cotizacion))''')
 
+    # ── Vuelos por tramo y hoteles múltiples (logística — el dinero sigue siendo
+    # un solo total en cobro_vuelos/costo_vuelos y cobro_hotel/costo_hotel,
+    # sin importar cuántas filas haya aquí) ──────────────────────────────────
+    cursor.execute('''CREATE TABLE IF NOT EXISTS vuelos_reserva (id_vuelo INTEGER PRIMARY KEY AUTOINCREMENT, id_reserva INTEGER, numero_tramo INTEGER NOT NULL DEFAULT 1, aerolinea TEXT, numero_vuelo TEXT, origen TEXT, destino TEXT, fecha TEXT, hora TEXT, localizador TEXT, checkin INTEGER DEFAULT 0, FOREIGN KEY (id_reserva) REFERENCES reservas(id_reserva))''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS vuelos_cotizacion (id_vuelo INTEGER PRIMARY KEY AUTOINCREMENT, id_cotizacion INTEGER, numero_tramo INTEGER NOT NULL DEFAULT 1, aerolinea TEXT, numero_vuelo TEXT, origen TEXT, destino TEXT, fecha TEXT, hora TEXT, localizador TEXT, FOREIGN KEY (id_cotizacion) REFERENCES cotizaciones(id_cotizacion))''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS hoteles_reserva (id_hotel_itin INTEGER PRIMARY KEY AUTOINCREMENT, id_reserva INTEGER, numero_orden INTEGER NOT NULL DEFAULT 1, ciudad_destino TEXT, nombre_hotel TEXT, localizador TEXT, fecha_checkin TEXT, fecha_checkout TEXT, FOREIGN KEY (id_reserva) REFERENCES reservas(id_reserva))''')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS hoteles_cotizacion (id_hotel_itin INTEGER PRIMARY KEY AUTOINCREMENT, id_cotizacion INTEGER, numero_orden INTEGER NOT NULL DEFAULT 1, ciudad_destino TEXT, nombre_hotel TEXT, localizador TEXT, fecha_checkin TEXT, fecha_checkout TEXT, FOREIGN KEY (id_cotizacion) REFERENCES cotizaciones(id_cotizacion))''')
+
+    for _tv_col in [
+        "ALTER TABLE reservas ADD COLUMN tipo_vuelo TEXT DEFAULT 'REDONDO'",
+        "ALTER TABLE cotizaciones ADD COLUMN tipo_vuelo TEXT DEFAULT 'REDONDO'",
+        "ALTER TABLE vuelos_reserva ADD COLUMN checkin INTEGER DEFAULT 0",
+    ]:
+        try: cursor.execute(_tv_col)
+        except Exception as e:
+            if "duplicate column" not in str(e).lower(): logging.error(f"ALTER ({_tv_col[:50]}): {e}")
+
     try: cursor.execute("ALTER TABLE clientes ADD COLUMN codigo_pais TEXT DEFAULT '+52'")
     except Exception as e:
         if "duplicate column" not in str(e).lower(): logging.error(f"ALTER clientes codigo_pais: {e}")

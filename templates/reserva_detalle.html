@@ -548,6 +548,16 @@
   {% include "extras_section.html" %}
 {% endwith %}
 
+<!-- ── Vuelos por tramo (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva, tipo_vuelo=reserva.tipo_vuelo, vuelos=vuelos, reserva_activa=reserva_activa %}
+  {% include "vuelos_section.html" %}
+{% endwith %}
+
+<!-- ── Hoteles (HTMX) ── -->
+{% with id_reserva=reserva.id_reserva, hoteles=hoteles_itin, reserva_activa=reserva_activa %}
+  {% include "hoteles_section.html" %}
+{% endwith %}
+
 <!-- ── PDFs ── -->
 <div class="card" style="margin-bottom:16px;">
   <div class="card-header">📄 Documentos</div>

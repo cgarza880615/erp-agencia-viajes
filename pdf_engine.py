@@ -184,7 +184,7 @@ def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cl
     return pdf_buffer.getvalue()
 
 
-def generar_cotizacion_pdf(cot, nombre_cliente, telefono_cliente, email_cliente, fechas_plan, logo_path, operador=""):
+def generar_cotizacion_pdf(cot, nombre_cliente, telefono_cliente, email_cliente, fechas_plan, logo_path, operador="", vuelos_df=None, hoteles_df=None):
     """Genera PDF de cotización profesional."""
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=letter)
@@ -254,6 +254,30 @@ def generar_cotizacion_pdf(cot, nombre_cliente, telefono_cliente, email_cliente,
         if der: c.drawString(w/2, y, der)
         y -= 14
     y -= 8
+
+    # Detalle de vuelos por tramo y hoteles múltiples — solo se dibuja si hay más
+    # de 1 fila (con 1 sola, ya lo muestra la línea "Aerolínea:"/"Hotel:" de arriba).
+    tipo_vuelo_lbl = "Sencillo" if cot.get('tipo_vuelo') == 'SENCILLO' else "Redondo"
+    if vuelos_df is not None and len(vuelos_df) > 1:
+        c.setFillColor(azul); c.setFont("Helvetica-Bold", 11)
+        c.drawString(m, y, f"VUELOS ({tipo_vuelo_lbl})")
+        y -= 16
+        c.setFillColor(negro); c.setFont("Helvetica", 9)
+        for _, vr in vuelos_df.iterrows():
+            _tramo = f"{vr.get('numero_tramo','')}. {vr.get('aerolinea','')} {vr.get('numero_vuelo') or ''} — {vr.get('origen') or ''} → {vr.get('destino') or ''} — {vr.get('fecha') or ''} {vr.get('hora') or ''}"
+            c.drawString(m + 5, y, _tramo[:110])
+            y -= 13
+        y -= 8
+    if hoteles_df is not None and len(hoteles_df) > 1:
+        c.setFillColor(azul); c.setFont("Helvetica-Bold", 11)
+        c.drawString(m, y, "HOTELES")
+        y -= 16
+        c.setFillColor(negro); c.setFont("Helvetica", 9)
+        for _, hr in hoteles_df.iterrows():
+            _htxt = f"{hr.get('numero_orden','')}. {hr.get('nombre_hotel','')} — {hr.get('ciudad_destino') or ''} ({hr.get('fecha_checkin') or ''} a {hr.get('fecha_checkout') or ''})"
+            c.drawString(m + 5, y, _htxt[:110])
+            y -= 13
+        y -= 8
 
     # Igual que Streamlit: si hay 2-3 opciones de hotel, se muestra un comparativo
     # de "OPCIONES DE HOTEL" con el total de cada una y los servicios incluidos sin
@@ -670,7 +694,7 @@ def generar_itinerario_pdf(exp, nombre_cliente, telefono_cliente, pasajeros_df, 
     return buf.getvalue()
 
 
-def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_df, logo_path, portal_url=None):
+def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_df, logo_path, portal_url=None, vuelos_df=None, hoteles_df=None):
     """Itinerario 'boutique' orientado al cliente final: banner de portada, timeline de fechas y
     tarjetas de color por sección. Sin localizador de mayorista ni datos financieros."""
     buf = BytesIO()
@@ -830,16 +854,27 @@ def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_
         _measure_or_draw(items, content_w, top - TITLE_BLOCK, draw=True)
         y = top - h_card - 9
 
-    if _tiene('fecha_vuelo_ida') or _tiene('fecha_vuelo_vuelta'):
+    _hay_vuelos_tramo = vuelos_df is not None and len(vuelos_df) > 0
+    if _hay_vuelos_tramo or _tiene('fecha_vuelo_ida') or _tiene('fecha_vuelo_vuelta'):
         items = []
-        if _tiene('aerolinea'):
-            items.append(("row", "Aerolínea:", exp['aerolinea'], False))
-        if _tiene('fecha_vuelo_ida'):
-            items.append(("row", "Vuelo ida:", _fecha_larga_es(exp['fecha_vuelo_ida'], exp.get('hora_vuelo_ida')), False))
-        if _tiene('fecha_vuelo_vuelta'):
-            items.append(("row", "Vuelo regreso:", _fecha_larga_es(exp['fecha_vuelo_vuelta'], exp.get('hora_vuelo_vuelta')), False))
-        if _tiene('itinerario_vuelo_plataforma'):
-            items.append(("row", "Localizador:", exp['itinerario_vuelo_plataforma'], False))
+        if _hay_vuelos_tramo:
+            _tipo_v_lbl = "Vuelo sencillo" if exp.get('tipo_vuelo') == 'SENCILLO' else "Vuelo redondo"
+            items.append(("row", "Tipo:", _tipo_v_lbl, False))
+            for _, vr in vuelos_df.iterrows():
+                _lbl_tramo = f"Tramo {vr.get('numero_tramo','')}:"
+                _val_tramo = f"{vr.get('aerolinea','')} {vr.get('numero_vuelo') or ''} — {vr.get('origen') or ''} → {vr.get('destino') or ''} — {_fecha_larga_es(vr.get('fecha'), vr.get('hora'))}"
+                items.append(("row", _lbl_tramo, _val_tramo, False))
+                if vr.get('localizador'):
+                    items.append(("row", "  Localizador:", vr['localizador'], False))
+        else:
+            if _tiene('aerolinea'):
+                items.append(("row", "Aerolínea:", exp['aerolinea'], False))
+            if _tiene('fecha_vuelo_ida'):
+                items.append(("row", "Vuelo ida:", _fecha_larga_es(exp['fecha_vuelo_ida'], exp.get('hora_vuelo_ida')), False))
+            if _tiene('fecha_vuelo_vuelta'):
+                items.append(("row", "Vuelo regreso:", _fecha_larga_es(exp['fecha_vuelo_vuelta'], exp.get('hora_vuelo_vuelta')), False))
+            if _tiene('itinerario_vuelo_plataforma'):
+                items.append(("row", "Localizador:", exp['itinerario_vuelo_plataforma'], False))
         if _tiene('detalle_equipaje'):
             items.append(("row", "Equipaje:", exp['detalle_equipaje'], False))
         items.append(("space", 4))
@@ -851,7 +886,19 @@ def generar_itinerario_cliente_pdf(exp, nombre_cliente, habitaciones_df, extras_
             "internacional.", "Helvetica-Oblique", 8))
         _draw_card("vuelos", "VUELOS", items)
 
-    if _tiene('nombre_hotel'):
+    _hay_hoteles_multi = hoteles_df is not None and len(hoteles_df) > 0
+    if _hay_hoteles_multi:
+        items = []
+        for _, hr in hoteles_df.iterrows():
+            _lbl_h = f"{hr.get('ciudad_destino') or 'Hotel'}:" if hr.get('ciudad_destino') else "Hotel:"
+            items.append(("row", _lbl_h, hr.get('nombre_hotel',''), True))
+            _fechas_h = f"{hr.get('fecha_checkin') or ''} a {hr.get('fecha_checkout') or ''}".strip()
+            if _fechas_h != "a":
+                items.append(("row", "  Fechas:", _fechas_h, False))
+            if hr.get('localizador'):
+                items.append(("row", "  Confirmación:", hr['localizador'], False))
+        _draw_card("hospedaje", "HOSPEDAJE", items)
+    elif _tiene('nombre_hotel'):
         items = [("row", "Hotel:", exp['nombre_hotel'], True)]
         if not _tiene('mayorista') and _tiene('itinerario_hotel_plataforma'):
             items.append(("row", "Confirmación:", exp['itinerario_hotel_plataforma'], False))

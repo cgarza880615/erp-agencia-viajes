@@ -391,6 +391,21 @@ async def dashboard(request: Request, mes: str = "", anio: str = ""):
         "ORDER BY r.fecha_salida ASC LIMIT 8"
     )
 
+    # ── Check-ins de vuelo pendientes (próximas 48h o ya vencidos) ──────────
+    # Los pases de abordaje se otorgan 48h antes del vuelo (ver manual) — se
+    # avisa desde que entra en esa ventana hasta que se marca hecho.
+    df_checkins = obtener_datos(
+        "SELECT v.id_vuelo, v.id_reserva, v.numero_tramo, v.aerolinea, v.numero_vuelo, "
+        "v.origen, v.destino, v.fecha, v.hora, r.destino as destino_viaje, c.nombre as nombre_cliente "
+        "FROM vuelos_reserva v "
+        "JOIN reservas r ON v.id_reserva = r.id_reserva "
+        "JOIN clientes c ON r.id_cliente = c.id_cliente "
+        "WHERE v.checkin = 0 AND r.estado = 'ACTIVO' "
+        "AND v.fecha IS NOT NULL AND v.fecha != '' "
+        "AND DATE(v.fecha) <= DATE('now', '+2 days') "
+        "ORDER BY v.fecha ASC, v.hora ASC LIMIT 15"
+    )
+
     # ── Gráfica 1: Ingresos vs Egresos MXN últimos 6 meses ──────────────────
     fecha_6m = str((_dt_dash.date(hoy.year, hoy.month, 1) - _dt_dash.timedelta(days=155)))
     df_tend = obtener_datos("""
@@ -451,6 +466,7 @@ async def dashboard(request: Request, mes: str = "", anio: str = ""):
         "active":           "dashboard",
         "stats":            stats,
         "proximas":         df_proximas.to_dict("records") if not df_proximas.empty else [],
+        "checkins_pendientes": df_checkins.to_dict("records") if not df_checkins.empty else [],
         "chart_tendencia":  chart_tendencia,
         "chart_destinos":   chart_destinos,
         "caja": {
@@ -950,6 +966,42 @@ async def crear_reserva(request: Request):
             ejecutar_comando(
                 "INSERT INTO habitaciones_reserva (id_reserva, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?)",
                 (id_new, h_tipo, h_pers, (form.get(f"hab_checkin_{i}") or "15:00").strip() or "15:00", (form.get(f"hab_descripcion_{i}") or "").strip() or None)
+            )
+
+        # Tipo de vuelo + vuelos por tramo + hoteles múltiples (opcionales, puramente
+        # logísticos — el dinero sigue siendo un solo total en cobro/costo de arriba)
+        _tv_new = form.get("tipo_vuelo") or "REDONDO"
+        if _tv_new not in ("SENCILLO", "REDONDO"):
+            _tv_new = "REDONDO"
+        ejecutar_comando("UPDATE reservas SET tipo_vuelo=? WHERE id_reserva=?", (_tv_new, id_new))
+        try:
+            n_vue = int(form.get("vue_n") or 0)
+        except Exception:
+            n_vue = 0
+        for i in range(1, n_vue + 1):
+            v_aero_i = (form.get(f"vue_aerolinea_{i}") or "").strip()
+            if not v_aero_i:
+                continue
+            ejecutar_comando(
+                "INSERT INTO vuelos_reserva (id_reserva, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador) VALUES (?,?,?,?,?,?,?,?,?)",
+                (id_new, i, v_aero_i, (form.get(f"vue_numero_{i}") or "").strip(),
+                 (form.get(f"vue_origen_{i}") or "").strip(), (form.get(f"vue_destino_{i}") or "").strip(),
+                 form.get(f"vue_fecha_{i}") or None, form.get(f"vue_hora_{i}") or None,
+                 (form.get(f"vue_localizador_{i}") or "").strip())
+            )
+        try:
+            n_hmu = int(form.get("hmu_n") or 0)
+        except Exception:
+            n_hmu = 0
+        for i in range(1, n_hmu + 1):
+            h_nombre_i = (form.get(f"hmu_nombre_{i}") or "").strip()
+            if not h_nombre_i:
+                continue
+            ejecutar_comando(
+                "INSERT INTO hoteles_reserva (id_reserva, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) VALUES (?,?,?,?,?,?,?)",
+                (id_new, i, (form.get(f"hmu_ciudad_{i}") or "").strip(), h_nombre_i,
+                 (form.get(f"hmu_localizador_{i}") or "").strip(),
+                 form.get(f"hmu_checkin_{i}") or None, form.get(f"hmu_checkout_{i}") or None)
             )
 
         # Insertar acompañantes seleccionados desde la DB del cliente
@@ -2477,6 +2529,231 @@ async def anular_extra(request: Request, id_reserva: int, id_extra: int):
     return _extras_html(request, id_reserva)
 
 
+# ─── Vuelos y Hoteles por tramo (HTMX) ───────────────────────────────────────
+# Puramente logístico: el dinero sigue siendo un solo total en
+# cobro_vuelos/costo_vuelos y cobro_hotel/costo_hotel sin importar cuántas
+# filas haya aquí (decisión explícita de Carlos, 2026-09-03).
+
+def _vuelos_html(request, id_reserva):
+    df_r = obtener_datos("SELECT tipo_vuelo, estado FROM reservas WHERE id_reserva=?", (id_reserva,))
+    tipo_vuelo = df_r.iloc[0]["tipo_vuelo"] if not df_r.empty else "REDONDO"
+    reserva_activa = (df_r.iloc[0]["estado"] == "ACTIVO") if not df_r.empty else False
+    df_v = obtener_datos(
+        "SELECT id_vuelo, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador, checkin "
+        "FROM vuelos_reserva WHERE id_reserva=? ORDER BY numero_tramo, id_vuelo",
+        (id_reserva,)
+    )
+    return templates.TemplateResponse(request, "vuelos_section.html", {
+        "request": request,
+        "id_reserva": id_reserva,
+        "tipo_vuelo": tipo_vuelo,
+        "vuelos": df_v.to_dict("records"),
+        "reserva_activa": reserva_activa,
+    })
+
+
+def _hoteles_html(request, id_reserva):
+    df_r = obtener_datos("SELECT estado FROM reservas WHERE id_reserva=?", (id_reserva,))
+    reserva_activa = (df_r.iloc[0]["estado"] == "ACTIVO") if not df_r.empty else False
+    df_h = obtener_datos(
+        "SELECT id_hotel_itin, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout "
+        "FROM hoteles_reserva WHERE id_reserva=? ORDER BY numero_orden, id_hotel_itin",
+        (id_reserva,)
+    )
+    return templates.TemplateResponse(request, "hoteles_section.html", {
+        "request": request,
+        "id_reserva": id_reserva,
+        "hoteles": df_h.to_dict("records"),
+        "reserva_activa": reserva_activa,
+    })
+
+
+@app.post("/bitacora/{id_reserva}/tipo_vuelo", response_class=HTMLResponse)
+async def cambiar_tipo_vuelo(request: Request, id_reserva: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    tipo = form.get("tipo_vuelo") or "REDONDO"
+    if tipo not in ("SENCILLO", "REDONDO"):
+        tipo = "REDONDO"
+    ejecutar_comando("UPDATE reservas SET tipo_vuelo=? WHERE id_reserva=?", (tipo, id_reserva))
+    return _vuelos_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/vuelos/agregar", response_class=HTMLResponse)
+async def agregar_vuelo(request: Request, id_reserva: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    aerolinea = (form.get("aerolinea") or "").strip()
+    if not aerolinea:
+        return _vuelos_html(request, id_reserva)
+    df_n = obtener_datos("SELECT COALESCE(MAX(numero_tramo),0) as n FROM vuelos_reserva WHERE id_reserva=?", (id_reserva,))
+    num_tramo = int(df_n.iloc[0]["n"] or 0) + 1
+    ejecutar_comando(
+        "INSERT INTO vuelos_reserva (id_reserva, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (id_reserva, num_tramo, aerolinea, (form.get("numero_vuelo") or "").strip(),
+         (form.get("origen") or "").strip(), (form.get("destino") or "").strip(),
+         form.get("fecha") or None, form.get("hora") or None, (form.get("localizador") or "").strip())
+    )
+    registrar_cambio(id_reserva, "VUELO", f"Tramo #{num_tramo} agregado: {aerolinea} {form.get('origen') or ''}→{form.get('destino') or ''}", usuario=usuario_activo(request))
+    return _vuelos_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/vuelos/{id_vuelo}/eliminar", response_class=HTMLResponse)
+async def eliminar_vuelo(request: Request, id_reserva: int, id_vuelo: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM vuelos_reserva WHERE id_vuelo=? AND id_reserva=?", (id_vuelo, id_reserva))
+    registrar_cambio(id_reserva, "VUELO ELIMINADO", f"Tramo id {id_vuelo}", usuario=usuario_activo(request))
+    return _vuelos_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/vuelos/{id_vuelo}/checkin", response_class=HTMLResponse)
+async def toggle_checkin_vuelo(request: Request, id_reserva: int, id_vuelo: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    df_v = obtener_datos("SELECT checkin, numero_tramo FROM vuelos_reserva WHERE id_vuelo=? AND id_reserva=?", (id_vuelo, id_reserva))
+    if not df_v.empty:
+        nuevo = 0 if int(df_v.iloc[0]["checkin"] or 0) == 1 else 1
+        ejecutar_comando("UPDATE vuelos_reserva SET checkin=? WHERE id_vuelo=?", (nuevo, id_vuelo))
+        registrar_cambio(id_reserva, "CHECK-IN VUELO", f"Tramo #{df_v.iloc[0]['numero_tramo']} — {'confirmado' if nuevo else 'revertido'}", usuario=usuario_activo(request))
+    # Desde Torre de Control (no es el fragmento #seccion-vuelos) manda recargar
+    # la página completa en vez de devolver el partial, que solo tiene sentido
+    # dentro del detalle del itinerario.
+    if request.headers.get("HX-Target") != "seccion-vuelos":
+        return HTMLResponse("", headers={"HX-Redirect": "/dashboard"})
+    return _vuelos_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/hoteles/agregar", response_class=HTMLResponse)
+async def agregar_hotel_itin(request: Request, id_reserva: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    nombre = (form.get("nombre_hotel") or "").strip()
+    if not nombre:
+        return _hoteles_html(request, id_reserva)
+    df_n = obtener_datos("SELECT COALESCE(MAX(numero_orden),0) as n FROM hoteles_reserva WHERE id_reserva=?", (id_reserva,))
+    num_orden = int(df_n.iloc[0]["n"] or 0) + 1
+    ejecutar_comando(
+        "INSERT INTO hoteles_reserva (id_reserva, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (id_reserva, num_orden, (form.get("ciudad_destino") or "").strip(), nombre,
+         (form.get("localizador") or "").strip(), form.get("fecha_checkin") or None, form.get("fecha_checkout") or None)
+    )
+    registrar_cambio(id_reserva, "HOTEL", f"Hotel #{num_orden} agregado: {nombre} ({form.get('ciudad_destino') or ''})", usuario=usuario_activo(request))
+    return _hoteles_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/hoteles/{id_hotel_itin}/eliminar", response_class=HTMLResponse)
+async def eliminar_hotel_itin(request: Request, id_reserva: int, id_hotel_itin: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM hoteles_reserva WHERE id_hotel_itin=? AND id_reserva=?", (id_hotel_itin, id_reserva))
+    registrar_cambio(id_reserva, "HOTEL ELIMINADO", f"Hotel id {id_hotel_itin}", usuario=usuario_activo(request))
+    return _hoteles_html(request, id_reserva)
+
+
+# ─── Vuelos y Hoteles para Cotizaciones (mismo patrón, tabla _cotizacion) ────
+
+def _vuelos_cot_html(request, id_cot):
+    df_c = obtener_datos("SELECT tipo_vuelo, estado FROM cotizaciones WHERE id_cotizacion=?", (id_cot,))
+    tipo_vuelo = df_c.iloc[0]["tipo_vuelo"] if not df_c.empty else "REDONDO"
+    cot_activa = (df_c.iloc[0]["estado"] not in ("ACEPTADA", "RECHAZADA", "EXPIRADA")) if not df_c.empty else False
+    df_v = obtener_datos(
+        "SELECT id_vuelo, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador "
+        "FROM vuelos_cotizacion WHERE id_cotizacion=? ORDER BY numero_tramo, id_vuelo",
+        (id_cot,)
+    )
+    return templates.TemplateResponse(request, "vuelos_cot_section.html", {
+        "request": request, "id_cot": id_cot, "tipo_vuelo": tipo_vuelo,
+        "vuelos": df_v.to_dict("records"), "cot_activa": cot_activa,
+    })
+
+
+def _hoteles_cot_html(request, id_cot):
+    df_c = obtener_datos("SELECT estado FROM cotizaciones WHERE id_cotizacion=?", (id_cot,))
+    cot_activa = (df_c.iloc[0]["estado"] not in ("ACEPTADA", "RECHAZADA", "EXPIRADA")) if not df_c.empty else False
+    df_h = obtener_datos(
+        "SELECT id_hotel_itin, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout "
+        "FROM hoteles_cotizacion WHERE id_cotizacion=? ORDER BY numero_orden, id_hotel_itin",
+        (id_cot,)
+    )
+    return templates.TemplateResponse(request, "hoteles_cot_section.html", {
+        "request": request, "id_cot": id_cot,
+        "hoteles": df_h.to_dict("records"), "cot_activa": cot_activa,
+    })
+
+
+@app.post("/cotizaciones/{id_cot}/tipo_vuelo", response_class=HTMLResponse)
+async def cotizacion_cambiar_tipo_vuelo(request: Request, id_cot: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    tipo = form.get("tipo_vuelo") or "REDONDO"
+    if tipo not in ("SENCILLO", "REDONDO"):
+        tipo = "REDONDO"
+    ejecutar_comando("UPDATE cotizaciones SET tipo_vuelo=? WHERE id_cotizacion=?", (tipo, id_cot))
+    return _vuelos_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/vuelos/agregar", response_class=HTMLResponse)
+async def cotizacion_agregar_vuelo(request: Request, id_cot: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    aerolinea = (form.get("aerolinea") or "").strip()
+    if not aerolinea:
+        return _vuelos_cot_html(request, id_cot)
+    df_n = obtener_datos("SELECT COALESCE(MAX(numero_tramo),0) as n FROM vuelos_cotizacion WHERE id_cotizacion=?", (id_cot,))
+    num_tramo = int(df_n.iloc[0]["n"] or 0) + 1
+    ejecutar_comando(
+        "INSERT INTO vuelos_cotizacion (id_cotizacion, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (id_cot, num_tramo, aerolinea, (form.get("numero_vuelo") or "").strip(),
+         (form.get("origen") or "").strip(), (form.get("destino") or "").strip(),
+         form.get("fecha") or None, form.get("hora") or None, (form.get("localizador") or "").strip())
+    )
+    return _vuelos_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/vuelos/{id_vuelo}/eliminar", response_class=HTMLResponse)
+async def cotizacion_eliminar_vuelo(request: Request, id_cot: int, id_vuelo: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM vuelos_cotizacion WHERE id_vuelo=? AND id_cotizacion=?", (id_vuelo, id_cot))
+    return _vuelos_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/hoteles/agregar", response_class=HTMLResponse)
+async def cotizacion_agregar_hotel(request: Request, id_cot: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    nombre = (form.get("nombre_hotel") or "").strip()
+    if not nombre:
+        return _hoteles_cot_html(request, id_cot)
+    df_n = obtener_datos("SELECT COALESCE(MAX(numero_orden),0) as n FROM hoteles_cotizacion WHERE id_cotizacion=?", (id_cot,))
+    num_orden = int(df_n.iloc[0]["n"] or 0) + 1
+    ejecutar_comando(
+        "INSERT INTO hoteles_cotizacion (id_cotizacion, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (id_cot, num_orden, (form.get("ciudad_destino") or "").strip(), nombre,
+         (form.get("localizador") or "").strip(), form.get("fecha_checkin") or None, form.get("fecha_checkout") or None)
+    )
+    return _hoteles_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/hoteles/{id_hotel_itin}/eliminar", response_class=HTMLResponse)
+async def cotizacion_eliminar_hotel(request: Request, id_cot: int, id_hotel_itin: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM hoteles_cotizacion WHERE id_hotel_itin=? AND id_cotizacion=?", (id_hotel_itin, id_cot))
+    return _hoteles_cot_html(request, id_cot)
+
+
 # ─── Check-list operativo (HTMX) ─────────────────────────────────────────────
 
 @app.post("/bitacora/{id_reserva}/checklist", response_class=HTMLResponse)
@@ -2652,7 +2929,16 @@ async def pdf_itinerario_cliente(request: Request, id_reserva: int):
     df_extras = obtener_datos("SELECT descripcion FROM extras_viaje WHERE id_reserva=? ORDER BY fecha_registro", (id_reserva,))
     token = obtener_token_portal(id_reserva)
     portal_url = str(request.base_url) + f"portal/{token}" if token else None
-    pdf = generar_itinerario_cliente_pdf(exp, exp["nombre_cliente"], df_hab, df_extras, LOGO_PATH, portal_url)
+    df_vuelos_itin = obtener_datos(
+        "SELECT numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador FROM vuelos_reserva WHERE id_reserva=? ORDER BY numero_tramo",
+        (id_reserva,)
+    )
+    df_hoteles_itin_pdf = obtener_datos(
+        "SELECT numero_orden, nombre_hotel, ciudad_destino, fecha_checkin, fecha_checkout, localizador FROM hoteles_reserva WHERE id_reserva=? ORDER BY numero_orden",
+        (id_reserva,)
+    )
+    pdf = generar_itinerario_cliente_pdf(exp, exp["nombre_cliente"], df_hab, df_extras, LOGO_PATH, portal_url,
+                                          vuelos_df=df_vuelos_itin, hoteles_df=df_hoteles_itin_pdf)
     return FastAPIResponse(content=pdf, media_type="application/pdf",
         headers={"Content-Disposition": f"inline; filename=Itinerario_Cliente_{id_reserva}_{exp['destino'].replace(' ','_')}.pdf"})
 
@@ -2925,6 +3211,17 @@ async def detalle_reserva(request: Request, id_reserva: int):
         "FROM flujo_caja WHERE id_reserva=? ORDER BY id_movimiento DESC",
         (id_reserva,)
     )
+    df_vuelos = obtener_datos(
+        "SELECT id_vuelo, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador, checkin "
+        "FROM vuelos_reserva WHERE id_reserva=? ORDER BY numero_tramo, id_vuelo",
+        (id_reserva,)
+    )
+    df_hoteles_itin = obtener_datos(
+        "SELECT id_hotel_itin, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout "
+        "FROM hoteles_reserva WHERE id_reserva=? ORDER BY numero_orden, id_hotel_itin",
+        (id_reserva,)
+    )
+    reserva_activa = reserva.get("estado") == "ACTIVO"
     return templates.TemplateResponse(request, "reserva_detalle.html", ctx(request, {
         "active": "bitacora",
         "reserva": reserva,
@@ -2939,6 +3236,9 @@ async def detalle_reserva(request: Request, id_reserva: int):
         "ingresos": df_ingresos.to_dict("records"),
         "extras": df_extras.to_dict("records"),
         "historial_flujo": df_historial_flujo.to_dict("records"),
+        "vuelos": df_vuelos.to_dict("records"),
+        "hoteles_itin": df_hoteles_itin.to_dict("records"),
+        "reserva_activa": reserva_activa,
         "extras_cobro_total": extras_cobro_total,
         "extras_costo_total": extras_costo_total,
         "hay_parcialidades_pendientes": hay_pend,
@@ -3666,10 +3966,19 @@ async def cotizacion_pdf(request: Request, id_cot: int):
         except Exception:
             pass
 
+    df_vuelos_pdf = obtener_datos(
+        "SELECT numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora FROM vuelos_cotizacion WHERE id_cotizacion=? ORDER BY numero_tramo",
+        (id_cot,)
+    )
+    df_hoteles_pdf = obtener_datos(
+        "SELECT numero_orden, nombre_hotel, ciudad_destino, fecha_checkin, fecha_checkout FROM hoteles_cotizacion WHERE id_cotizacion=? ORDER BY numero_orden",
+        (id_cot,)
+    )
     pdf_bytes = generar_cotizacion_pdf(
         cot, cli["nombre"], cli["telefono"], cli["email"],
         plan_fechas, "static/img/logo.png",
-        operador=cot.get("usuario_creador") or usuario_activo(request)
+        operador=cot.get("usuario_creador") or usuario_activo(request),
+        vuelos_df=df_vuelos_pdf, hoteles_df=df_hoteles_pdf
     )
     folio = f"COT-{str(cot['fecha_cotizacion'])[:4]}-{id_cot:04d}"
     return Response(
@@ -3760,6 +4069,17 @@ async def cotizacion_detalle(request: Request, id_cot: int):
         plan_preview = _construir_plan(float(cot["venta_total"]))
 
     folio = f"COT-{str(cot['fecha_cotizacion'])[:4]}-{id_cot:04d}"
+    df_vuelos_cot = obtener_datos(
+        "SELECT id_vuelo, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador "
+        "FROM vuelos_cotizacion WHERE id_cotizacion=? ORDER BY numero_tramo, id_vuelo",
+        (id_cot,)
+    )
+    df_hoteles_cot = obtener_datos(
+        "SELECT id_hotel_itin, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout "
+        "FROM hoteles_cotizacion WHERE id_cotizacion=? ORDER BY numero_orden, id_hotel_itin",
+        (id_cot,)
+    )
+    cot_activa = cot.get("estado") not in ("ACEPTADA", "RECHAZADA", "EXPIRADA")
     return templates.TemplateResponse(request, "cotizacion_detalle.html", ctx(request, {
         "active": "cotizaciones",
         "cot": cot,
@@ -3767,6 +4087,9 @@ async def cotizacion_detalle(request: Request, id_cot: int):
         "plan_preview": plan_preview,
         "plans_por_opcion": plans_por_opcion if _es_multi else [],
         "today": str(now_local().date()),
+        "vuelos_cot": df_vuelos_cot.to_dict("records"),
+        "hoteles_cot": df_hoteles_cot.to_dict("records"),
+        "cot_activa": cot_activa,
     }))
 
 

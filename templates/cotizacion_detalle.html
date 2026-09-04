@@ -225,6 +225,16 @@
 </div>
 {% endif %}
 
+<!-- Vuelos por tramo -->
+{% with id_cot=cot.id_cotizacion, tipo_vuelo=cot.tipo_vuelo, vuelos=vuelos_cot, cot_activa=cot_activa %}
+  {% include "vuelos_cot_section.html" %}
+{% endwith %}
+
+<!-- Hoteles -->
+{% with id_cot=cot.id_cotizacion, hoteles=hoteles_cot, cot_activa=cot_activa %}
+  {% include "hoteles_cot_section.html" %}
+{% endwith %}
+
 <!-- Notas -->
 {% if cot.notas %}
 <div class="card" style="margin-bottom:16px;">
