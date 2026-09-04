@@ -1955,7 +1955,7 @@ async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
     import re as _re_pdf
     from pdf_engine import generar_recibo_pdf as _gen_recibo
     df_mov = obtener_datos(
-        "SELECT id_movimiento, concepto, monto, moneda, fecha_pago, metodo_pago "
+        "SELECT id_movimiento, concepto, monto, moneda, fecha_pago, metodo_pago, usuario_creador "
         "FROM flujo_caja WHERE id_movimiento=? AND id_reserva=? AND tipo_movimiento='INGRESO'",
         (id_mov, id_reserva)
     )
@@ -1995,7 +1995,7 @@ async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
         concepto=mov["concepto"],
         saldo_anterior=saldo_anterior,
         saldo_actual=saldo_actual,
-        operador=usuario_activo(request),
+        operador=mov.get("usuario_creador") or usuario_activo(request),
         id_reserva=id_reserva,
         destino=res["destino"],
         logo_path=LOGO_PATH,
@@ -3669,7 +3669,7 @@ async def cotizacion_pdf(request: Request, id_cot: int):
     pdf_bytes = generar_cotizacion_pdf(
         cot, cli["nombre"], cli["telefono"], cli["email"],
         plan_fechas, "static/img/logo.png",
-        operador=usuario_activo(request)
+        operador=cot.get("usuario_creador") or usuario_activo(request)
     )
     folio = f"COT-{str(cot['fecha_cotizacion'])[:4]}-{id_cot:04d}"
     return Response(
