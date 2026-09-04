@@ -450,14 +450,7 @@
       <label class="field-label">Núm. de hoteles</label>
       <input class="field-input" type="number" id="hmu-n" name="hmu_n" min="0" max="10" value="0" oninput="hmuGenerarFilas()">
     </div>
-    <table style="width:100%;" id="hmu-tabla">
-      <thead>
-        <tr>
-          <th style="width:36px;">#</th><th>Ciudad/Destino</th><th>Nombre del hotel</th><th>Check-in</th><th>Check-out</th><th>Localizador</th>
-        </tr>
-      </thead>
-      <tbody id="hmu-filas"></tbody>
-    </table>
+    <div id="hmu-bloques"></div>
   </div>
 </div>
 {% endif %}
@@ -466,6 +459,9 @@
 <div class="card" style="margin-bottom:16px;">
   <div class="card-header">🛏️ Habitaciones</div>
   <div class="card-body">
+    <p style="font-size:0.8rem; color:var(--text2); margin:0 0 12px;">
+      ℹ️ Este bloque es solo para viajes con <strong>un único hotel</strong>. Si capturaste varios hoteles arriba en "Hoteles múltiples", agrega las habitaciones de cada uno directamente en su propio bloque — no aquí.
+    </p>
     <div class="form-field" style="width:160px; margin-bottom:12px;">
       <label class="field-label">Núm. de habitaciones</label>
       <input class="field-input" type="number" id="hab-n" name="hab_n"
@@ -881,21 +877,56 @@ document.getElementById('form-reserva')?.addEventListener('input', function(ev) 
 })();
 
 (function() {
-  if (!document.getElementById('hmu-filas')) return;
-  function hmuGenerarFilas() {
-    const n = parseInt(document.getElementById('hmu-n').value) || 0;
-    const tbody = document.getElementById('hmu-filas');
+  if (!document.getElementById('hmu-bloques')) return;
+
+  function hmuHabGenerarFilas(i) {
+    const n = parseInt(document.getElementById(`hmu-hab-n-${i}`).value) || 0;
+    const tbody = document.getElementById(`hmu-hab-filas-${i}`);
     tbody.innerHTML = '';
-    for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= n; j++) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td style="color:var(--text2); font-size:0.8rem;">${i}</td>
-        <td><input class="field-input" type="text" name="hmu_ciudad_${i}" placeholder="Ej. Cartagena"></td>
-        <td><input class="field-input" type="text" name="hmu_nombre_${i}" placeholder="Ej. Hotel Caribe"></td>
-        <td><input class="field-input" type="date" name="hmu_checkin_${i}"></td>
-        <td><input class="field-input" type="date" name="hmu_checkout_${i}"></td>
-        <td><input class="field-input" type="text" name="hmu_localizador_${i}"></td>`;
+        <td style="color:var(--text2); font-size:0.78rem;">${j}</td>
+        <td><input class="field-input" type="text" name="hmu_hab_tipo_${i}_${j}" placeholder="Ej. Junior Suite"></td>
+        <td><input class="field-input" type="number" name="hmu_hab_personas_${i}_${j}" min="1" value="2"></td>
+        <td><input class="field-input" type="text" name="hmu_hab_checkin_${i}_${j}" placeholder="15:00"></td>
+        <td><input class="field-input" type="text" name="hmu_hab_descripcion_${i}_${j}" placeholder="Opcional"></td>`;
       tbody.appendChild(tr);
+    }
+  }
+  window.hmuHabGenerarFilas = hmuHabGenerarFilas;
+
+  function hmuGenerarFilas() {
+    const n = parseInt(document.getElementById('hmu-n').value) || 0;
+    const cont = document.getElementById('hmu-bloques');
+    cont.innerHTML = '';
+    for (let i = 1; i <= n; i++) {
+      const div = document.createElement('div');
+      div.style.cssText = 'border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;';
+      div.innerHTML = `
+        <div class="form-grid">
+          <div class="form-field"><label class="field-label">#${i} Ciudad/Destino</label>
+            <input class="field-input" type="text" name="hmu_ciudad_${i}" placeholder="Ej. Cartagena"></div>
+          <div class="form-field"><label class="field-label">Nombre del hotel</label>
+            <input class="field-input" type="text" name="hmu_nombre_${i}" placeholder="Ej. Hotel Caribe"></div>
+          <div class="form-field"><label class="field-label">Check-in</label>
+            <input class="field-input" type="date" name="hmu_checkin_${i}"></div>
+          <div class="form-field"><label class="field-label">Check-out</label>
+            <input class="field-input" type="date" name="hmu_checkout_${i}"></div>
+          <div class="form-field"><label class="field-label">Localizador</label>
+            <input class="field-input" type="text" name="hmu_localizador_${i}"></div>
+        </div>
+        <div class="form-field" style="width:160px; margin-top:8px;">
+          <label class="field-label">🛏️ Núm. de habitaciones de este hotel</label>
+          <input class="field-input" type="number" id="hmu-hab-n-${i}" name="hmu_hab_n_${i}" min="0" max="10" value="0" oninput="hmuHabGenerarFilas(${i})">
+        </div>
+        <table style="width:100%; margin-top:8px;">
+          <thead><tr>
+            <th style="width:30px;">#</th><th>Tipo de habitación</th><th style="width:90px;">Personas</th><th style="width:90px;">Check-in</th><th>Descripción</th>
+          </tr></thead>
+          <tbody id="hmu-hab-filas-${i}"></tbody>
+        </table>`;
+      cont.appendChild(div);
     }
   }
   window.hmuGenerarFilas = hmuGenerarFilas;

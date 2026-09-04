@@ -997,12 +997,28 @@ async def crear_reserva(request: Request):
             h_nombre_i = (form.get(f"hmu_nombre_{i}") or "").strip()
             if not h_nombre_i:
                 continue
-            ejecutar_comando(
+            _id_hotel_i = ejecutar_insert(
                 "INSERT INTO hoteles_reserva (id_reserva, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) VALUES (?,?,?,?,?,?,?)",
                 (id_new, i, (form.get(f"hmu_ciudad_{i}") or "").strip(), h_nombre_i,
                  (form.get(f"hmu_localizador_{i}") or "").strip(),
                  form.get(f"hmu_checkin_{i}") or None, form.get(f"hmu_checkout_{i}") or None)
             )
+            try:
+                _n_hmu_hab = int(form.get(f"hmu_hab_n_{i}") or 0)
+            except Exception:
+                _n_hmu_hab = 0
+            for j in range(1, _n_hmu_hab + 1):
+                _hh_tipo = (form.get(f"hmu_hab_tipo_{i}_{j}") or "").strip()
+                if not _hh_tipo:
+                    continue
+                try: _hh_pers = int(form.get(f"hmu_hab_personas_{i}_{j}") or 1)
+                except Exception: _hh_pers = 1
+                ejecutar_comando(
+                    "INSERT INTO habitaciones_reserva (id_reserva, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?,?)",
+                    (id_new, _id_hotel_i, _hh_tipo, _hh_pers,
+                     (form.get(f"hmu_hab_checkin_{i}_{j}") or "15:00").strip() or "15:00",
+                     (form.get(f"hmu_hab_descripcion_{i}_{j}") or "").strip() or None)
+                )
 
         # Insertar acompañantes seleccionados desde la DB del cliente
         ids_acompanante = form.getlist("acompanante_id")
@@ -2552,6 +2568,19 @@ def _vuelos_html(request, id_reserva):
     })
 
 
+def _habitaciones_por_hotel(tabla_hab: str, col_fk: str, id_val: int):
+    """Agrupa habitaciones_reserva/habitaciones_cotizacion por id_hotel_itin."""
+    df = obtener_datos(
+        f"SELECT id_habitacion, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion "
+        f"FROM {tabla_hab} WHERE {col_fk}=? AND id_hotel_itin IS NOT NULL ORDER BY id_habitacion",
+        (id_val,)
+    )
+    agrupado = {}
+    for r in df.to_dict("records"):
+        agrupado.setdefault(int(r["id_hotel_itin"]), []).append(r)
+    return agrupado
+
+
 def _hoteles_html(request, id_reserva):
     df_r = obtener_datos("SELECT estado FROM reservas WHERE id_reserva=?", (id_reserva,))
     reserva_activa = (df_r.iloc[0]["estado"] == "ACTIVO") if not df_r.empty else False
@@ -2564,6 +2593,7 @@ def _hoteles_html(request, id_reserva):
         "request": request,
         "id_reserva": id_reserva,
         "hoteles": df_h.to_dict("records"),
+        "habitaciones_por_hotel": _habitaciones_por_hotel("habitaciones_reserva", "id_reserva", id_reserva),
         "reserva_activa": reserva_activa,
     })
 
@@ -2652,7 +2682,34 @@ async def eliminar_hotel_itin(request: Request, id_reserva: int, id_hotel_itin: 
     if not usuario_activo(request):
         return HTMLResponse("", status_code=401)
     ejecutar_comando("DELETE FROM hoteles_reserva WHERE id_hotel_itin=? AND id_reserva=?", (id_hotel_itin, id_reserva))
+    ejecutar_comando("DELETE FROM habitaciones_reserva WHERE id_hotel_itin=?", (id_hotel_itin,))
     registrar_cambio(id_reserva, "HOTEL ELIMINADO", f"Hotel id {id_hotel_itin}", usuario=usuario_activo(request))
+    return _hoteles_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/hoteles/{id_hotel_itin}/habitaciones/agregar", response_class=HTMLResponse)
+async def agregar_habitacion_hotel(request: Request, id_reserva: int, id_hotel_itin: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    tipo = (form.get("tipo_habitacion") or "").strip()
+    if not tipo:
+        return _hoteles_html(request, id_reserva)
+    try: personas = int(form.get("num_personas") or 1)
+    except Exception: personas = 1
+    ejecutar_comando(
+        "INSERT INTO habitaciones_reserva (id_reserva, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?,?)",
+        (id_reserva, id_hotel_itin, tipo, personas,
+         (form.get("hora_checkin") or "15:00").strip() or "15:00", (form.get("descripcion") or "").strip() or None)
+    )
+    return _hoteles_html(request, id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/hoteles/{id_hotel_itin}/habitaciones/{id_habitacion}/eliminar", response_class=HTMLResponse)
+async def eliminar_habitacion_hotel(request: Request, id_reserva: int, id_hotel_itin: int, id_habitacion: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM habitaciones_reserva WHERE id_habitacion=? AND id_hotel_itin=?", (id_habitacion, id_hotel_itin))
     return _hoteles_html(request, id_reserva)
 
 
@@ -2684,6 +2741,7 @@ def _hoteles_cot_html(request, id_cot):
     return templates.TemplateResponse(request, "hoteles_cot_section.html", {
         "request": request, "id_cot": id_cot,
         "hoteles": df_h.to_dict("records"), "cot_activa": cot_activa,
+        "habitaciones_por_hotel": _habitaciones_por_hotel("habitaciones_cotizacion", "id_cotizacion", id_cot),
     })
 
 
@@ -2751,6 +2809,33 @@ async def cotizacion_eliminar_hotel(request: Request, id_cot: int, id_hotel_itin
     if not usuario_activo(request):
         return HTMLResponse("", status_code=401)
     ejecutar_comando("DELETE FROM hoteles_cotizacion WHERE id_hotel_itin=? AND id_cotizacion=?", (id_hotel_itin, id_cot))
+    ejecutar_comando("DELETE FROM habitaciones_cotizacion WHERE id_hotel_itin=?", (id_hotel_itin,))
+    return _hoteles_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/hoteles/{id_hotel_itin}/habitaciones/agregar", response_class=HTMLResponse)
+async def cotizacion_agregar_habitacion_hotel(request: Request, id_cot: int, id_hotel_itin: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    tipo = (form.get("tipo_habitacion") or "").strip()
+    if not tipo:
+        return _hoteles_cot_html(request, id_cot)
+    try: personas = int(form.get("num_personas") or 1)
+    except Exception: personas = 1
+    ejecutar_comando(
+        "INSERT INTO habitaciones_cotizacion (id_cotizacion, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?,?)",
+        (id_cot, id_hotel_itin, tipo, personas,
+         (form.get("hora_checkin") or "15:00").strip() or "15:00", (form.get("descripcion") or "").strip() or None)
+    )
+    return _hoteles_cot_html(request, id_cot)
+
+
+@app.post("/cotizaciones/{id_cot}/hoteles/{id_hotel_itin}/habitaciones/{id_habitacion}/eliminar", response_class=HTMLResponse)
+async def cotizacion_eliminar_habitacion_hotel(request: Request, id_cot: int, id_hotel_itin: int, id_habitacion: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    ejecutar_comando("DELETE FROM habitaciones_cotizacion WHERE id_habitacion=? AND id_hotel_itin=?", (id_habitacion, id_hotel_itin))
     return _hoteles_cot_html(request, id_cot)
 
 
@@ -3238,6 +3323,7 @@ async def detalle_reserva(request: Request, id_reserva: int):
         "historial_flujo": df_historial_flujo.to_dict("records"),
         "vuelos": df_vuelos.to_dict("records"),
         "hoteles_itin": df_hoteles_itin.to_dict("records"),
+        "habitaciones_por_hotel": _habitaciones_por_hotel("habitaciones_reserva", "id_reserva", id_reserva),
         "reserva_activa": reserva_activa,
         "extras_cobro_total": extras_cobro_total,
         "extras_costo_total": extras_costo_total,
@@ -4089,6 +4175,7 @@ async def cotizacion_detalle(request: Request, id_cot: int):
         "today": str(now_local().date()),
         "vuelos_cot": df_vuelos_cot.to_dict("records"),
         "hoteles_cot": df_hoteles_cot.to_dict("records"),
+        "habitaciones_por_hotel": _habitaciones_por_hotel("habitaciones_cotizacion", "id_cotizacion", id_cot),
         "cot_activa": cot_activa,
     }))
 

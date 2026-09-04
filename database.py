@@ -220,6 +220,8 @@ def verificar_tablas():
         "ALTER TABLE reservas ADD COLUMN tipo_vuelo TEXT DEFAULT 'REDONDO'",
         "ALTER TABLE cotizaciones ADD COLUMN tipo_vuelo TEXT DEFAULT 'REDONDO'",
         "ALTER TABLE vuelos_reserva ADD COLUMN checkin INTEGER DEFAULT 0",
+        "ALTER TABLE habitaciones_reserva ADD COLUMN id_hotel_itin INTEGER",
+        "ALTER TABLE habitaciones_cotizacion ADD COLUMN id_hotel_itin INTEGER",
     ]:
         try: cursor.execute(_tv_col)
         except Exception as e:
@@ -1258,6 +1260,58 @@ def crear_cotizacion(datos: dict, usuario: str):
             (new_id, h_tipo, h_pers, (datos.get(f"hab_checkin_{i}") or "15:00").strip() or "15:00", (datos.get(f"hab_descripcion_{i}") or "").strip() or None)
         )
 
+    # Tipo de vuelo + vuelos por tramo + hoteles múltiples (opcionales, solo al
+    # crear — el dinero sigue siendo un solo total en cobro/costo de arriba)
+    _tv_cot = datos.get("tipo_vuelo") or "REDONDO"
+    if _tv_cot not in ("SENCILLO", "REDONDO"):
+        _tv_cot = "REDONDO"
+    ejecutar_comando("UPDATE cotizaciones SET tipo_vuelo=? WHERE id_cotizacion=?", (_tv_cot, new_id))
+    try:
+        n_vue = int(datos.get("vue_n") or 0)
+    except Exception:
+        n_vue = 0
+    for i in range(1, n_vue + 1):
+        v_aero_i = (datos.get(f"vue_aerolinea_{i}") or "").strip()
+        if not v_aero_i:
+            continue
+        ejecutar_comando(
+            "INSERT INTO vuelos_cotizacion (id_cotizacion, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador) VALUES (?,?,?,?,?,?,?,?,?)",
+            (new_id, i, v_aero_i, (datos.get(f"vue_numero_{i}") or "").strip(),
+             (datos.get(f"vue_origen_{i}") or "").strip(), (datos.get(f"vue_destino_{i}") or "").strip(),
+             datos.get(f"vue_fecha_{i}") or None, datos.get(f"vue_hora_{i}") or None,
+             (datos.get(f"vue_localizador_{i}") or "").strip())
+        )
+    try:
+        n_hmu = int(datos.get("hmu_n") or 0)
+    except Exception:
+        n_hmu = 0
+    for i in range(1, n_hmu + 1):
+        h_nombre_i = (datos.get(f"hmu_nombre_{i}") or "").strip()
+        if not h_nombre_i:
+            continue
+        _id_hotel_i = ejecutar_insert(
+            "INSERT INTO hoteles_cotizacion (id_cotizacion, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) VALUES (?,?,?,?,?,?,?)",
+            (new_id, i, (datos.get(f"hmu_ciudad_{i}") or "").strip(), h_nombre_i,
+             (datos.get(f"hmu_localizador_{i}") or "").strip(),
+             datos.get(f"hmu_checkin_{i}") or None, datos.get(f"hmu_checkout_{i}") or None)
+        )
+        try:
+            _n_hmu_hab = int(datos.get(f"hmu_hab_n_{i}") or 0)
+        except Exception:
+            _n_hmu_hab = 0
+        for j in range(1, _n_hmu_hab + 1):
+            _hh_tipo = (datos.get(f"hmu_hab_tipo_{i}_{j}") or "").strip()
+            if not _hh_tipo:
+                continue
+            try: _hh_pers = int(datos.get(f"hmu_hab_personas_{i}_{j}") or 1)
+            except Exception: _hh_pers = 1
+            ejecutar_comando(
+                "INSERT INTO habitaciones_cotizacion (id_cotizacion, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?,?)",
+                (new_id, _id_hotel_i, _hh_tipo, _hh_pers,
+                 (datos.get(f"hmu_hab_checkin_{i}_{j}") or "15:00").strip() or "15:00",
+                 (datos.get(f"hmu_hab_descripcion_{i}_{j}") or "").strip() or None)
+            )
+
     return new_id, None
 
 
@@ -1334,8 +1388,11 @@ def convertir_cotizacion(id_cotizacion: int, hotel_opcion_elegida, usuario: str)
     df_new = obtener_datos("SELECT MAX(id_reserva) as n FROM reservas")
     id_reserva = int(df_new.iloc[0]["n"])
 
+    # Solo las habitaciones "genéricas" (sin hotel específico, caso de un único
+    # hotel) — las que sí pertenecen a un hotel de Hoteles múltiples se copian
+    # más abajo, junto con su hotel, remapeadas al nuevo id_hotel_itin.
     df_hab_cot = obtener_datos(
-        "SELECT tipo_habitacion, num_personas, hora_checkin, descripcion FROM habitaciones_cotizacion WHERE id_cotizacion=?",
+        "SELECT tipo_habitacion, num_personas, hora_checkin, descripcion FROM habitaciones_cotizacion WHERE id_cotizacion=? AND id_hotel_itin IS NULL",
         (id_cotizacion,)
     )
     for h in df_hab_cot.to_dict("records"):
@@ -1343,6 +1400,41 @@ def convertir_cotizacion(id_cotizacion: int, hotel_opcion_elegida, usuario: str)
             "INSERT INTO habitaciones_reserva (id_reserva, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?)",
             (id_reserva, h["tipo_habitacion"], h["num_personas"], h["hora_checkin"] or "15:00", h.get("descripcion"))
         )
+
+    ejecutar_comando("UPDATE reservas SET tipo_vuelo=? WHERE id_reserva=?", (cr.get("tipo_vuelo") or "REDONDO", id_reserva))
+
+    df_vue_cot = obtener_datos(
+        "SELECT numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador "
+        "FROM vuelos_cotizacion WHERE id_cotizacion=?", (id_cotizacion,)
+    )
+    for v in df_vue_cot.to_dict("records"):
+        ejecutar_comando(
+            "INSERT INTO vuelos_reserva (id_reserva, numero_tramo, aerolinea, numero_vuelo, origen, destino, fecha, hora, localizador) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (id_reserva, v["numero_tramo"], v["aerolinea"], v.get("numero_vuelo"), v.get("origen"),
+             v.get("destino"), v.get("fecha"), v.get("hora"), v.get("localizador"))
+        )
+
+    df_hot_cot = obtener_datos(
+        "SELECT id_hotel_itin, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout "
+        "FROM hoteles_cotizacion WHERE id_cotizacion=?", (id_cotizacion,)
+    )
+    for h2 in df_hot_cot.to_dict("records"):
+        id_hotel_nuevo = ejecutar_insert(
+            "INSERT INTO hoteles_reserva (id_reserva, numero_orden, ciudad_destino, nombre_hotel, localizador, fecha_checkin, fecha_checkout) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (id_reserva, h2["numero_orden"], h2.get("ciudad_destino"), h2["nombre_hotel"],
+             h2.get("localizador"), h2.get("fecha_checkin"), h2.get("fecha_checkout"))
+        )
+        df_hab_hotel_cot = obtener_datos(
+            "SELECT tipo_habitacion, num_personas, hora_checkin, descripcion FROM habitaciones_cotizacion WHERE id_hotel_itin=?",
+            (h2["id_hotel_itin"],)
+        )
+        for hh in df_hab_hotel_cot.to_dict("records"):
+            ejecutar_comando(
+                "INSERT INTO habitaciones_reserva (id_reserva, id_hotel_itin, tipo_habitacion, num_personas, hora_checkin, descripcion) VALUES (?,?,?,?,?,?)",
+                (id_reserva, id_hotel_nuevo, hh["tipo_habitacion"], hh["num_personas"], hh["hora_checkin"] or "15:00", hh.get("descripcion"))
+            )
 
     df_cli = obtener_datos("SELECT nombre, fecha_nacimiento FROM clientes WHERE id_cliente=?", (cr["id_cliente"],))
     if not df_cli.empty:

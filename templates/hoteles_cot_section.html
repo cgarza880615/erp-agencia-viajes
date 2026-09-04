@@ -4,31 +4,81 @@
   <div class="card-body" style="padding-bottom:0;">
 
     {% if hoteles %}
-    <table style="width:100%; margin-bottom:16px;">
-      <thead>
-        <tr><th>#</th><th>Ciudad / Destino</th><th>Hotel</th><th>Check-in</th><th>Check-out</th><th>Localizador</th><th></th></tr>
-      </thead>
-      <tbody>
-        {% for h in hoteles %}
-        <tr>
-          <td>{{ h.numero_orden }}</td>
-          <td>{{ h.ciudad_destino or '—' }}</td>
-          <td>{{ h.nombre_hotel }}</td>
-          <td>{{ h.fecha_checkin or '—' }}</td>
-          <td>{{ h.fecha_checkout or '—' }}</td>
-          <td>{{ h.localizador or '—' }}</td>
-          <td>
-            {% if cot_activa %}
-            <button type="button" class="btn-icon-danger"
-                    hx-post="/cotizaciones/{{ id_cot }}/hoteles/{{ h.id_hotel_itin }}/eliminar"
-                    hx-target="#seccion-hoteles-cot" hx-swap="outerHTML"
-                    hx-confirm="¿Eliminar este hotel?">✕</button>
-            {% endif %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    {% for h in hoteles %}
+    <div style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+        <div style="font-size:0.875rem;">
+          <strong>#{{ h.numero_orden }} {{ h.nombre_hotel }}</strong>{% if h.ciudad_destino %} — {{ h.ciudad_destino }}{% endif %}<br>
+          <span style="color:var(--text2);">{{ h.fecha_checkin or '—' }} a {{ h.fecha_checkout or '—' }}{% if h.localizador %} · Loc: {{ h.localizador }}{% endif %}</span>
+        </div>
+        {% if cot_activa %}
+        <button type="button" class="btn-icon-danger"
+                hx-post="/cotizaciones/{{ id_cot }}/hoteles/{{ h.id_hotel_itin }}/eliminar"
+                hx-target="#seccion-hoteles-cot" hx-swap="outerHTML"
+                hx-confirm="¿Eliminar este hotel y sus habitaciones?">✕</button>
+        {% endif %}
+      </div>
+
+      <div style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border);">
+        <p style="font-size:0.8rem; font-weight:600; color:var(--text2); margin:0 0 6px;">🛏️ Habitaciones de este hotel</p>
+        {% set habs = habitaciones_por_hotel.get(h.id_hotel_itin, []) %}
+        {% if habs %}
+        <table style="width:100%; margin-bottom:8px;">
+          <thead><tr><th>Tipo</th><th style="width:80px;">Personas</th><th style="width:90px;">Check-in</th><th>Descripción</th><th></th></tr></thead>
+          <tbody>
+            {% for hab in habs %}
+            <tr>
+              <td>{{ hab.tipo_habitacion }}</td>
+              <td>{{ hab.num_personas }}</td>
+              <td>{{ hab.hora_checkin or '—' }}</td>
+              <td>{{ hab.descripcion or '—' }}</td>
+              <td>
+                {% if cot_activa %}
+                <button type="button" class="btn-icon-danger"
+                        hx-post="/cotizaciones/{{ id_cot }}/hoteles/{{ h.id_hotel_itin }}/habitaciones/{{ hab.id_habitacion }}/eliminar"
+                        hx-target="#seccion-hoteles-cot" hx-swap="outerHTML">✕</button>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <p style="color:var(--text2); font-size:0.8rem; margin-bottom:8px;">Sin habitaciones capturadas para este hotel.</p>
+        {% endif %}
+
+        {% if cot_activa %}
+        <details>
+          <summary style="cursor:pointer; font-size:0.8rem; color:var(--primary); font-weight:600;">+ Agregar habitación</summary>
+          <form hx-post="/cotizaciones/{{ id_cot }}/hoteles/{{ h.id_hotel_itin }}/habitaciones/agregar"
+                hx-target="#seccion-hoteles-cot" hx-swap="outerHTML" style="margin-top:8px;">
+            <div class="form-grid">
+              <div class="form-field">
+                <label class="field-label">Tipo de habitación *</label>
+                <input class="field-input" type="text" name="tipo_habitacion" required placeholder="Ej: Junior Suite">
+              </div>
+              <div class="form-field">
+                <label class="field-label">Personas</label>
+                <input class="field-input" type="number" name="num_personas" min="1" value="2">
+              </div>
+              <div class="form-field">
+                <label class="field-label">Check-in</label>
+                <input class="field-input" type="text" name="hora_checkin" placeholder="15:00">
+              </div>
+              <div class="form-field">
+                <label class="field-label">Descripción (opcional)</label>
+                <input class="field-input" type="text" name="descripcion">
+              </div>
+            </div>
+            <div style="margin-top:8px;">
+              <button type="submit" class="btn btn-primary" style="font-size:0.8rem;">💾 Agregar habitación</button>
+            </div>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
     {% else %}
     <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin hoteles registrados. El costo/cobro de hotel sigue siendo el total capturado en el itinerario — esta lista es solo el detalle para el PDF.</p>
     {% endif %}
