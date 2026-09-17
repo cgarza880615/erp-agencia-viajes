@@ -21,6 +21,11 @@
   <span style="color:#2874a6;">Si el costo real del proveedor cambió, marca "Pago final" abajo para actualizarlo automáticamente, o corrígelo primero en el itinerario. Si es un pago parcial, déjalo en blanco — es normal seguir abonando después.</span>
 </div>
 {% endif %}
+{% if saldo_credito_aerolinea is not none %}
+<div style="background:rgba(155,89,182,0.10);border-left:5px solid #9b59b6;border-radius:8px;padding:10px 16px;margin:8px 0 0;font-size:0.82rem;">
+  💳 Saldo de crédito con la aerolínea disponible: <b>${{ '{:,.2f}'.format(saldo_credito_aerolinea) }} MXN</b>
+</div>
+{% endif %}
 {% if col_costo and costo_reg > 0 and monto and monto > 0 %}
 <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:0.82rem; cursor:pointer;">
   <input type="checkbox" name="pago_final" value="1">

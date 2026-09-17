@@ -26,7 +26,7 @@
           </td>
           <td>
             <button type="button" class="btn-icon-danger"
-                    onclick="abrirAnularExtra({{ e.id_extra }}, '{{ e.descripcion | replace("'","\'") }}')">✕</button>
+                    onclick="abrirAnularExtra({{ e.id_extra }}, '{{ e.descripcion | replace("'","\'") }}', '{{ e.metodo_pago or '' }}')">✕</button>
           </td>
         </tr>
         {% endfor %}
@@ -137,6 +137,17 @@
         <label class="field-label">Motivo de anulación *</label>
         <input class="field-input" type="text" name="motivo" required placeholder="Ej: Error de captura">
       </div>
+      <div id="modal-extra-comision-wrap-{{ id_reserva }}" style="display:none; margin-bottom:14px; padding:10px 12px; background:rgba(0,0,0,0.03); border-radius:8px;">
+        <label class="field-label">Este extra tenía comisión bancaria automática — ¿qué hacemos con ella?</label>
+        <label style="display:flex; gap:6px; align-items:flex-start; font-size:0.8rem; margin-top:8px; cursor:pointer;">
+          <input type="radio" name="revertir_comision" value="1" checked style="margin-top:2px;">
+          <span>Fue un error de captura — no se cobró de verdad, <b>revertir la comisión</b>.</span>
+        </label>
+        <label style="display:flex; gap:6px; align-items:flex-start; font-size:0.8rem; margin-top:6px; cursor:pointer;">
+          <input type="radio" name="revertir_comision" value="0" style="margin-top:2px;">
+          <span>Es una devolución al cliente — el banco <b>no regresa</b> la comisión, déjala como costo real.</span>
+        </label>
+      </div>
       <div style="display:flex; gap:10px;">
         <button type="submit" class="btn btn-primary" style="background:var(--danger); font-size:0.875rem;">Anular</button>
         <button type="button" class="btn btn-outline" style="font-size:0.875rem;"
@@ -167,11 +178,13 @@ function extraTipo(rid, val) {
 function extraComision(rid, val) {
   document.getElementById('extra-com-wrap-' + rid).style.display = (val === 'Tarjeta de Crédito/Débito') ? '' : 'none';
 }
-function abrirAnularExtra(idExtra, desc) {
+function abrirAnularExtra(idExtra, desc, metodoPago) {
   const rid  = {{ id_reserva }};
   const modal = document.getElementById('modal-extra-' + rid);
   const form  = document.getElementById('form-anular-extra-' + rid);
   document.getElementById('modal-extra-desc-' + rid).textContent = desc;
+  document.getElementById('modal-extra-comision-wrap-' + rid).style.display =
+    (metodoPago === 'Tarjeta de Crédito/Débito') ? '' : 'none';
   const url = `/bitacora/${rid}/extras/${idExtra}/anular`;
   form.setAttribute('hx-post', url);
   form.setAttribute('action', url);

@@ -53,7 +53,18 @@
 
 <div class="callout tip">
   <strong>Pago final</strong>
-  Si marcas la casilla "Pago final" al registrar, y el monto pagado es distinto al costo que tenías capturado, el sistema ajusta automáticamente ese costo (y la utilidad) al monto real que terminaste pagando.
+  Si marcas la casilla "Pago final" al registrar, y el monto pagado es distinto al costo que tenías capturado, el sistema ajusta automáticamente ese costo (y la utilidad) al monto real que terminaste pagando. Si el monto no coincide con el costo registrado, el sistema pregunta si el costo real cambió (para ajustarlo) o si es un pago parcial (dejarlo tal cual y seguir abonando después).
+</div>
+
+<h2>💳 Crédito de aerolínea</h2>
+<p>Cuando una aerolínea, por un cambio de fecha o una cancelación, no reembolsa en efectivo sino que da un crédito reutilizable, el sistema lo registra en dos pasos separados:</p>
+<ul>
+  <li><strong>Generarlo:</strong> si la reserva se cancela, hay un campo "💳 Crédito de aerolínea generado" dentro del modal de Cancelar Reserva. Si solo cambia la fecha del vuelo sin cancelar nada, usa "💳 Registrar crédito de aerolínea generado" dentro de Pagos a Proveedores.</li>
+  <li><strong>Usarlo:</strong> al registrar un "Pago de Vuelo (Proveedor)" — en cualquier itinerario, no solo el que lo generó — aparece "Crédito Aerolínea" como opción de Método de pago. Solo se puede usar hasta el saldo disponible; si el vuelo nuevo cuesta más, se puede completar con otro método en un segundo pago.</li>
+</ul>
+<div class="callout tip">
+  <strong>El crédito no queda ligado al itinerario</strong>
+  El crédito generado en una reserva NO se resta de su propio costo — se suma a un saldo general (visible en el Libro Diario) que se puede gastar después en el vuelo de cualquier cliente.
 </div>
 
 <h2>❓ Preguntas Frecuentes</h2>

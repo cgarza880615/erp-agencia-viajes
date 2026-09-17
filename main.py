@@ -1953,6 +1953,9 @@ async def anular_cobro(request: Request, id_reserva: int, id_mov: int):
         return HTMLResponse("", status_code=401)
     form = await request.form()
     motivo = (form.get("motivo") or "Sin motivo").strip()
+    # Ver nota en anular_extra: por defecto se revierte la comisión (error de captura). Si
+    # es una devolución al cliente, el banco no la regresa — se deja como costo real.
+    revertir_comision = (form.get("revertir_comision") or "1") == "1"
     # Guardar datos del movimiento antes de cancelar
     df_mov = obtener_datos("SELECT tipo_movimiento, monto, concepto, categoria FROM flujo_caja WHERE id_movimiento=?", (id_mov,))
     tipo_mov = df_mov.iloc[0]["tipo_movimiento"] if not df_mov.empty else "INGRESO"
@@ -1978,12 +1981,14 @@ async def anular_cobro(request: Request, id_reserva: int, id_mov: int):
             ejecutar_comando("DELETE FROM extras_viaje WHERE id_extra=?", (_id_extra_void,))
             ejecutar_comando("UPDATE reservas SET venta_total = ROUND(venta_total - ?, 2) WHERE id_reserva=?", (_monto_extra_void, id_reserva))
     # Si este abono tenía una comisión bancaria automática vinculada, se cancela también —
-    # si el abono se anuló es que no se hizo, así que la comisión tampoco se cobró.
+    # por defecto (error de captura: el abono nunca se hizo, la comisión tampoco se cobró).
+    # Si el motivo real es una devolución al cliente, revertir_comision=False y la comisión
+    # se deja activa — el banco no la regresa aunque el dinero sí se le devuelva al cliente.
     if tipo_mov == "INGRESO":
         df_comi_void = obtener_datos(
             "SELECT id_movimiento, monto FROM flujo_caja WHERE id_movimiento_vinculado=? AND categoria='Comisiones Bancarias' AND estado='ACTIVO'",
             (id_mov,)
-        )
+        ) if revertir_comision else pd.DataFrame()
         if not df_comi_void.empty:
             _id_comi_void = int(df_comi_void.iloc[0]["id_movimiento"])
             _monto_comi_void = round(float(df_comi_void.iloc[0]["monto"] or 0), 2)
@@ -2110,7 +2115,8 @@ def _pago_prov_preview_ctx(id_reserva, categoria, monto):
     col_costo = _CAT_TO_COL_PROV.get(categoria)
     ctx = {"id_reserva": id_reserva, "categoria": categoria, "monto": monto,
            "col_costo": col_costo, "aviso": None,
-           "costo_reg": 0.0, "total_ya": 0.0, "total_tras": 0.0}
+           "costo_reg": 0.0, "total_ya": 0.0, "total_tras": 0.0,
+           "saldo_credito_aerolinea": _saldo_credito_aerolinea_total() if categoria == "Pago de Vuelo (Proveedor)" else None}
     if categoria == "Pago de Paquete (Mayorista)":
         df_pkg = obtener_datos("SELECT costo_total, costo_comisiones, es_paquete_global FROM reservas WHERE id_reserva=?", (id_reserva,))
         if df_pkg.empty or int(df_pkg.iloc[0]["es_paquete_global"] or 0) != 1:
@@ -2153,6 +2159,18 @@ async def preview_pago_proveedor(request: Request, id_reserva: int):
     ctx = _pago_prov_preview_ctx(id_reserva, categoria, monto)
     return templates.TemplateResponse(request, "pago_prov_preview.html", ctx)
 
+def _pago_prov_costos_map(id_reserva):
+    """Mapa categoria -> {costo_reg, total_ya} para todas las categorías de pago a
+    proveedor, para que el formulario pueda avisar de un monto que no coincide con
+    el costo SIN depender del round-trip async de /pagos-proveedor/preview (ese
+    debounce de 400ms deja una ventana en la que Enter dispara el submit antes de
+    que el aviso/checkbox "pago final" se alcance a renderizar)."""
+    mapa = {}
+    for categoria in list(_CAT_TO_COL_PROV.keys()) + ["Pago de Paquete (Mayorista)"]:
+        ctx = _pago_prov_preview_ctx(id_reserva, categoria, 0.0)
+        mapa[categoria] = {"costo_reg": ctx["costo_reg"], "total_ya": ctx["total_ya"]}
+    return mapa
+
 def _pagos_prov_ctx(id_reserva):
     df_r = obtener_datos(
         "SELECT r.moneda, r.id_grupo, g.nombre_grupo FROM reservas r "
@@ -2180,6 +2198,7 @@ def _pagos_prov_ctx(id_reserva):
         # de grupo — ese control vive a nivel de grupo (evita alertas falsas duplicadas
         # y pagos dobles si alguien paga aquí Y en /grupos/{id}).
         "semaforo_prov": [] if es_de_grupo else _build_semaforo(id_reserva),
+        "costos_prov_map": {} if es_de_grupo else _pago_prov_costos_map(id_reserva),
         "es_de_grupo": es_de_grupo,
         "nombre_grupo": nombre_grupo,
         "id_grupo": id_grupo_reserva,
@@ -2226,6 +2245,66 @@ def _build_semaforo(id_reserva):
         semaforo.append({"label": lbl, "costo": c, "pagado": p, "estado": est})
     return semaforo
 
+def _saldo_credito_aerolinea_total():
+    """Saldo disponible de crédito con la aerolínea — snapshot en vivo, no depende de
+    ningún itinerario ni período. Vive enteramente en flujo_caja, sin tabla propia:
+    entra como INGRESO 'Crédito Aerolínea Generado' (id_reserva NULL) y sale como
+    EGRESO normal de 'Pago de Vuelo (Proveedor)' cuando metodo_pago='Crédito Aerolínea'
+    — al anular ese pago, el saldo se restaura solo porque se recalcula sobre
+    estado='ACTIVO'. 'Ajuste Crédito Aerolínea' (INGRESO o EGRESO) es el ajuste manual
+    — para cargar el saldo real inicial o corregir por expiración, ver
+    _credito_aerolinea_ajustar_manual()."""
+    df_in = obtener_datos(
+        "SELECT COALESCE(SUM(monto),0) as t FROM flujo_caja "
+        "WHERE tipo_movimiento='INGRESO' AND categoria IN ('Crédito Aerolínea Generado','Ajuste Crédito Aerolínea') "
+        "AND estado='ACTIVO'"
+    )
+    df_out = obtener_datos(
+        "SELECT COALESCE(SUM(monto),0) as t FROM flujo_caja "
+        "WHERE tipo_movimiento='EGRESO' AND estado='ACTIVO' AND ("
+        "(categoria='Pago de Vuelo (Proveedor)' AND metodo_pago='Crédito Aerolínea') "
+        "OR categoria='Ajuste Crédito Aerolínea')"
+    )
+    generado = float(df_in.iloc[0]["t"]) if not df_in.empty else 0.0
+    aplicado = float(df_out.iloc[0]["t"]) if not df_out.empty else 0.0
+    return round(generado - aplicado, 2)
+
+
+def _credito_aerolinea_ajustar_manual(tipo, monto, motivo, usuario):
+    """Ajuste manual del saldo de crédito con la aerolínea — abierto a cualquier
+    usuario logueado, siempre requiere motivo, y queda registrado como movimiento
+    normal en Libro Diario con su propia categoría ('Ajuste Crédito Aerolínea'), nunca
+    se edita el saldo en silencio."""
+    hoy = str(now_local().date())
+    concepto = f"[Ajuste manual crédito aerolínea] {motivo}"
+    tipo_mov = "INGRESO" if tipo == "sumar" else "EGRESO"
+    id_mov = ejecutar_insert(
+        "INSERT INTO flujo_caja (id_reserva, tipo_movimiento, categoria, concepto, "
+        "monto, moneda, fecha_pago, usuario_creador, fecha_creacion) "
+        f"VALUES (NULL, '{tipo_mov}', 'Ajuste Crédito Aerolínea', ?, ?, 'MXN', ?, ?, ?)",
+        (concepto, monto, hoy, usuario, hoy)
+    )
+    return id_mov
+
+
+def _credito_aerolinea_registrar_generado(id_reserva_origen, motivo, monto, usuario):
+    """Registra crédito de aerolínea generado (cancelación o cambio de vuelo) como un
+    INGRESO normal de flujo_caja — id_reserva=NULL para no inflar cobrado_cliente/
+    venta_total del itinerario de origen (mismo criterio que Ingresos de oficina)."""
+    hoy = str(now_local().date())
+    concepto = f"[Crédito Aerolínea] Itin #{id_reserva_origen} — {motivo}"
+    id_mov = ejecutar_insert(
+        "INSERT INTO flujo_caja (id_reserva, tipo_movimiento, categoria, concepto, "
+        "monto, moneda, fecha_pago, usuario_creador, fecha_creacion) "
+        "VALUES (NULL, 'INGRESO', 'Crédito Aerolínea Generado', ?, ?, 'MXN', ?, ?, ?)",
+        (concepto, monto, hoy, usuario, hoy)
+    )
+    if id_mov:
+        registrar_cambio(id_reserva_origen, "CRÉDITO AEROLÍNEA GENERADO",
+                          f"${monto:,.2f} MXN — {motivo}", usuario=usuario)
+    return id_mov
+
+
 def _pagos_prov_response(id_reserva):
     """Devuelve la sección HTMX + OOB del semáforo."""
     ctx_prov = _pagos_prov_ctx(id_reserva)          # ya incluye semaforo_prov
@@ -2260,6 +2339,13 @@ async def registrar_pago_proveedor(request: Request, id_reserva: int):
     _ctx_doble = _pago_prov_preview_ctx(id_reserva, categoria, monto) if categoria else {"aviso": None}
     if _ctx_doble.get("aviso") == "doble":
         return _pagos_prov_response(id_reserva)
+
+    # El crédito de aerolínea solo aplica a Vuelo, y solo hasta el saldo disponible —
+    # igual que el candado de doble pago, se recalcula server-side (el preview es
+    # solo informativo).
+    if metodo == "Crédito Aerolínea":
+        if categoria != "Pago de Vuelo (Proveedor)" or monto > _saldo_credito_aerolinea_total():
+            return _pagos_prov_response(id_reserva)
 
     if monto > 0 and categoria:
         id_mov_nuevo = ejecutar_insert(
@@ -2330,6 +2416,26 @@ async def anular_pago_proveedor(request: Request, id_reserva: int, id_mov: int):
                     f"Revertido por anulación del pago #{id_mov}: {col_rev} regresó de ${val_nuevo:,.2f} a ${val_ant:,.2f}",
                     usuario=usuario)
     registrar_cambio(id_reserva, "PAGO PROVEEDOR", f"Pago #{id_mov} anulado", usuario=usuario)
+    return _pagos_prov_response(id_reserva)
+
+
+@app.post("/bitacora/{id_reserva}/credito-aerolinea/generar", response_class=HTMLResponse)
+async def credito_aerolinea_generar(request: Request, id_reserva: int):
+    """Registra crédito de aerolínea generado por un cambio de itinerario que NO llega
+    a cancelar la reserva (para cancelación, ver el campo dedicado en cancelar_reserva)
+    — vive en Pagos a Proveedores porque aplica sin importar si la reserva se cancela
+    o no."""
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    usuario = usuario_activo(request)
+    motivo = (form.get("motivo") or "Cambio de vuelo").strip()
+    try:
+        monto = float(form.get("monto") or 0)
+    except Exception:
+        monto = 0.0
+    if monto > 0:
+        _credito_aerolinea_registrar_generado(id_reserva, motivo, monto, usuario)
     return _pagos_prov_response(id_reserva)
 
 
@@ -2466,6 +2572,14 @@ async def agregar_extra(request: Request, id_reserva: int):
                             "concepto, monto, moneda, fecha_pago, fecha_creacion, id_extra) "
                             "VALUES (?, 'EGRESO', 'COSTO DIRECTO VIAJE', 'Comisiones Bancarias', ?, ?, ?, ?, ?, ?)",
                             (id_reserva, f"[Automático] Comisión Extra: {desc}", comision, moneda, fecha, str(now_local().date()), _id_extra_nuevo)))
+                # Igual que en registrar_cobro: la comisión también se refleja en las
+                # columnas de reservas, no solo en flujo_caja — de lo contrario
+                # costo_total/utilidad_proyectada quedan congeladas e inflan la utilidad
+                # mostrada.
+                ops.append((
+                    "UPDATE reservas SET costo_comisiones = ROUND(costo_comisiones + ?, 2), costo_total = ROUND(costo_total + ?, 2), utilidad_proyectada = ROUND(utilidad_proyectada - ?, 2) WHERE id_reserva = ?",
+                    (comision, comision, comision, id_reserva)
+                ))
             if ops:
                 ejecutar_transaccion(ops)
             from database import sincronizar_cobrado_cliente
@@ -2482,6 +2596,11 @@ async def anular_extra(request: Request, id_reserva: int, id_extra: int):
     form   = await request.form()
     motivo = (form.get("motivo") or "Sin motivo").strip()
     usuario = usuario_activo(request)
+    # Si el extra tenía comisión bancaria automática: por defecto se revierte (error de
+    # captura, no se cobró de verdad). Si el usuario marca "es una devolución", la comisión
+    # NO se revierte — el banco no regresa esa comisión aunque se le devuelva el dinero al
+    # cliente, así que sigue siendo un costo real.
+    revertir_comision = (form.get("revertir_comision") or "1") == "1"
 
     df_ex = obtener_datos(
         "SELECT descripcion, monto_cobrado_cliente, tipo_registro, id_pago_plan FROM extras_viaje WHERE id_extra=?",
@@ -2509,8 +2628,13 @@ async def anular_extra(request: Request, id_reserva: int, id_extra: int):
             (id_extra,)
         )
         if not n_por_id.empty and int(n_por_id.iloc[0]["n"]) > 0:
+            # Sin el filtro de categoría, este UPDATE cancelaba de rebote la fila de
+            # "Comisiones Bancarias" del mismo id_extra ANTES de que el bloque de abajo
+            # la encontrara ACTIVA — la comisión quedaba cancelada pero
+            # costo_comisiones/costo_total/utilidad_proyectada nunca se revertían. Ahora
+            # solo toca la fila de "Cobro Extra al Cliente".
             ejecutar_comando(
-                "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_extra=?",
+                "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_extra=? AND categoria='Cobro Extra al Cliente'",
                 (motivo, id_extra)
             )
         else:
@@ -2520,6 +2644,29 @@ async def anular_extra(request: Request, id_reserva: int, id_extra: int):
                 "AND estado='ACTIVO' LIMIT 1",
                 (motivo, id_reserva, cobro)
             )
+        # Si este extra tenía una comisión bancaria automática vinculada (pagado con
+        # tarjeta), se cancela también y se revierte su reflejo en reservas — mismo
+        # patrón que anular_cobro. Solo si el usuario indicó que fue error de captura —
+        # si es una devolución al cliente, la comisión del banco NO se recupera y se
+        # deja activa como costo real.
+        df_comi_void_ex = obtener_datos(
+            "SELECT id_movimiento, monto FROM flujo_caja WHERE id_extra=? AND categoria='Comisiones Bancarias' AND estado='ACTIVO'",
+            (id_extra,)
+        ) if revertir_comision else pd.DataFrame()
+        if not df_comi_void_ex.empty:
+            _id_comi_void_ex = int(df_comi_void_ex.iloc[0]["id_movimiento"])
+            _monto_comi_void_ex = round(float(df_comi_void_ex.iloc[0]["monto"] or 0), 2)
+            ejecutar_comando(
+                "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_movimiento=?",
+                (f"Auto-cancelada: comisión del extra anulado. {motivo}", _id_comi_void_ex)
+            )
+            ejecutar_comando(
+                "UPDATE reservas SET costo_comisiones = ROUND(costo_comisiones - ?, 2), costo_total = ROUND(costo_total - ?, 2), utilidad_proyectada = ROUND(utilidad_proyectada + ?, 2) WHERE id_reserva = ?",
+                (_monto_comi_void_ex, _monto_comi_void_ex, _monto_comi_void_ex, id_reserva)
+            )
+            registrar_cambio(id_reserva, "COSTOS ACTUALIZADOS",
+                              f"Comisión bancaria #{_id_comi_void_ex} (${_monto_comi_void_ex:,.2f}) cancelada y revertida por anulación del extra.",
+                              usuario=usuario)
         from database import sincronizar_cobrado_cliente
         sincronizar_cobrado_cliente(id_reserva)
         actualizar_estado_plan_pagos(id_reserva)
@@ -2896,6 +3043,7 @@ async def cancelar_reserva(request: Request, id_reserva: int):
 
     reembolso = _f("reembolso")
     perdida   = _f("perdida")
+    credito_aerolinea = _f("credito_aerolinea_generado")
     df_r = obtener_datos("SELECT moneda FROM reservas WHERE id_reserva=?", (id_reserva,))
     moneda = df_r.iloc[0]["moneda"] if not df_r.empty else "MXN"
 
@@ -2914,8 +3062,11 @@ async def cancelar_reserva(request: Request, id_reserva: int):
     if reembolso > 0:
         from database import sincronizar_cobrado_cliente
         sincronizar_cobrado_cliente(id_reserva)
+    if credito_aerolinea > 0:
+        _credito_aerolinea_registrar_generado(id_reserva, f"Cancelación — {motivo}", credito_aerolinea, usuario_activo(request))
     registrar_cambio(id_reserva, "CANCELADO",
-        f"Motivo: {motivo} — Reembolso: ${reembolso:,.2f} — Pérdida: ${perdida:,.2f}",
+        f"Motivo: {motivo} — Reembolso: ${reembolso:,.2f} — Pérdida: ${perdida:,.2f}"
+        + (f" — Crédito aerolínea generado: ${credito_aerolinea:,.2f}" if credito_aerolinea > 0 else ""),
         usuario=usuario_activo(request))
     return RedirectResponse(url=f"/bitacora/{id_reserva}", status_code=303)
 
@@ -4493,6 +4644,28 @@ def _retenido_sin_aplicar_total(moneda):
     return round(total, 2)
 
 
+@app.post("/libro-diario/credito-aerolinea/ajustar")
+async def credito_aerolinea_ajustar(request: Request):
+    """Ajuste manual del saldo de crédito con la aerolínea — abierto a cualquier
+    usuario logueado (no amarrado a admin/una persona en particular), pero siempre
+    requiere motivo + checkbox de confirmación, y queda registrado con
+    usuario_creador — el candado real es que nunca es silencioso, no que esté
+    restringido a un rol."""
+    if not usuario_activo(request):
+        return RedirectResponse(url="/login")
+    form = await request.form()
+    tipo   = (form.get("tipo") or "").strip()
+    motivo = (form.get("motivo") or "").strip()
+    confirmar = (form.get("confirmar") or "") == "SI"
+    try:
+        monto = float(form.get("monto") or 0)
+    except Exception:
+        monto = 0.0
+    if confirmar and motivo and monto > 0 and tipo in ("sumar", "restar"):
+        _credito_aerolinea_ajustar_manual(tipo, monto, motivo, usuario_activo(request))
+    return RedirectResponse(url="/libro-diario", status_code=303)
+
+
 @app.get("/libro-diario", response_class=HTMLResponse)
 async def libro_diario(request: Request):
     if not usuario_activo(request):
@@ -4587,6 +4760,7 @@ async def libro_diario(request: Request):
     metodos_disp = df_met["metodo_pago"].tolist() if not df_met.empty else []
 
     retenido_sin_aplicar = _retenido_sin_aplicar_total(moneda_sel)
+    saldo_credito_aerolinea = _saldo_credito_aerolinea_total()
 
     return templates.TemplateResponse(request, "libro_diario.html", ctx(request, {
         "active": "libro",
@@ -4595,6 +4769,7 @@ async def libro_diario(request: Request):
         "total_egresos": total_egresos,
         "balance_neto": balance_neto,
         "retenido_sin_aplicar": retenido_sin_aplicar,
+        "saldo_credito_aerolinea": saldo_credito_aerolinea,
         "periodo": periodo,
         "f_ini": f_ini,
         "f_fin": f_fin,
@@ -4688,8 +4863,10 @@ async def ingresos_oficina(request: Request):
 
     where, args = ["fc.tipo_movimiento = 'ACTIVO' OR 1=1"], []
     # Solo ingresos de oficina (sin reserva ligada); los abonos de clientes
-    # viven dentro de cada itinerario y en el Libro Diario consolidado
-    where = ["fc.tipo_movimiento = 'INGRESO'", "fc.id_reserva IS NULL"]
+    # viven dentro de cada itinerario y en el Libro Diario consolidado.
+    # 'Crédito Aerolínea Generado' también tiene id_reserva NULL pero no es capital de
+    # oficina — se audita en Libro Diario, no aquí (ver _saldo_credito_aerolinea_total).
+    where = ["fc.tipo_movimiento = 'INGRESO'", "fc.id_reserva IS NULL", "fc.categoria != 'Crédito Aerolínea Generado'"]
     if f_ini: where.append("fc.fecha_pago >= ?"); args.append(f_ini)
     if f_fin: where.append("fc.fecha_pago <= ?"); args.append(f_fin)
     if filtro_cat: where.append("fc.categoria = ?"); args.append(filtro_cat)

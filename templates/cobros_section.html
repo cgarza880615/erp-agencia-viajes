@@ -39,7 +39,7 @@
              style="text-decoration:none;">📄</a>
           <button type="button" class="btn-icon-danger"
                   title="Anular cobro"
-                  onclick="abrirAnular({{ c.id_movimiento }})">✕</button>
+                  onclick="abrirAnular({{ c.id_movimiento }}, '{{ c.metodo_pago or '' }}')">✕</button>
         </td>
       </tr>
       {% endfor %}
@@ -160,6 +160,17 @@
         <label class="field-label">Motivo de anulación</label>
         <input class="field-input" type="text" name="motivo" required placeholder="Ej: Error de captura, devolución...">
       </div>
+      <div id="modal-anular-comision-wrap-{{ id_reserva }}" style="display:none; margin-bottom:14px; padding:10px 12px; background:rgba(0,0,0,0.03); border-radius:8px;">
+        <label class="field-label">Este abono tenía comisión bancaria automática — ¿qué hacemos con ella?</label>
+        <label style="display:flex; gap:6px; align-items:flex-start; font-size:0.8rem; margin-top:8px; cursor:pointer;">
+          <input type="radio" name="revertir_comision" value="1" checked style="margin-top:2px;">
+          <span>Fue un error de captura — no se cobró de verdad, <b>revertir la comisión</b>.</span>
+        </label>
+        <label style="display:flex; gap:6px; align-items:flex-start; font-size:0.8rem; margin-top:6px; cursor:pointer;">
+          <input type="radio" name="revertir_comision" value="0" style="margin-top:2px;">
+          <span>Es una devolución al cliente — el banco <b>no regresa</b> la comisión, déjala como costo real.</span>
+        </label>
+      </div>
       <div style="display:flex; gap:10px;">
         <button type="submit" class="btn btn-primary" style="background:var(--danger); font-size:0.875rem;">
           Confirmar anulación
@@ -207,10 +218,12 @@ function actualizarPreviewComision(id) {
     preview.style.display = 'none';
   }
 }
-function abrirAnular(idMov) {
+function abrirAnular(idMov, metodoPago) {
   const rid = {{ id_reserva }};
   const modal = document.getElementById('modal-anular-' + rid);
   const form  = document.getElementById('form-anular-' + rid);
+  document.getElementById('modal-anular-comision-wrap-' + rid).style.display =
+    (metodoPago === 'Tarjeta de Crédito/Débito') ? '' : 'none';
   const url = `/bitacora/${rid}/cobros/${idMov}/anular`;
   form.setAttribute('hx-post', url);
   form.setAttribute('action', url);

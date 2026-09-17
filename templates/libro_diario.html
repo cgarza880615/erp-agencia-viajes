@@ -145,6 +145,51 @@
     <div class="kpi-sub">{{ moneda_sel }} · a hoy, no depende del período</div>
   </div>
 
+  <div class="card kpi-card" style="border-color:#9b59b6;">
+    <div class="kpi-label">💳 Saldo Crédito Aerolínea</div>
+    <div class="kpi-value" style="color:#9b59b6;">${{ '{:,.0f}'.format(saldo_credito_aerolinea) }}</div>
+    <div class="kpi-sub">
+      MXN · a hoy, no depende del período
+      &nbsp;·&nbsp;<a href="#" onclick="document.getElementById('credito-aerolinea-ajuste-wrap').style.display='block'; this.style.display='none'; return false;" style="color:#9b59b6; font-weight:600;">⚙️ Ajustar</a>
+    </div>
+  </div>
+
+</div>
+
+<div id="credito-aerolinea-ajuste-wrap" style="display:none; margin:-8px 0 20px;">
+  <div class="card" style="border-left:4px solid #9b59b6; padding:16px 20px;">
+    <div style="font-weight:600; color:#9b59b6; margin-bottom:8px; font-size:0.9rem;">⚙️ Ajuste manual de saldo de crédito con la aerolínea</div>
+    <p style="font-size:0.8rem; color:var(--text2); margin:0 0 12px;">
+      Solo para cargar el saldo real inicial (la primera vez) o corregir por expiración/error de la aerolínea — queda registrado como movimiento normal en este Libro Diario, nunca se edita el saldo "en silencio".
+    </p>
+    <form method="post" action="/libro-diario/credito-aerolinea/ajustar">
+      <div class="form-grid" style="margin-bottom:10px;">
+        <div class="form-field">
+          <label class="field-label">Tipo de ajuste</label>
+          <select name="tipo" class="field-select" required>
+            <option value="sumar">➕ Aumentar saldo (ej. saldo real ya existente)</option>
+            <option value="restar">➖ Disminuir saldo (ej. expiró / corrección)</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">Monto (MXN)</label>
+          <input class="field-input field-money" type="number" name="monto" min="0.01" step="0.01" required>
+        </div>
+        <div class="form-field" style="grid-column:span 2;">
+          <label class="field-label">Motivo (obligatorio)</label>
+          <input class="field-input" type="text" name="motivo" required placeholder="Ej: Saldo real con la aerolínea al 2026-09-16, confirmado por el equipo">
+        </div>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:0.82rem; margin-bottom:12px; cursor:pointer;">
+        <input type="checkbox" id="chk-credito-aerolinea-ajuste" onchange="document.getElementById('btn-credito-aerolinea-ajuste').disabled = !this.checked">
+        Confirmo que quiero ajustar el saldo de crédito con la aerolínea manualmente.
+      </label>
+      <input type="hidden" name="confirmar" value="SI">
+      <button type="submit" id="btn-credito-aerolinea-ajuste" class="btn btn-primary" style="background:#9b59b6; font-size:0.875rem;" disabled>
+        Aplicar ajuste
+      </button>
+    </form>
+  </div>
 </div>
 <p style="font-size:0.78rem; color:var(--text2); margin:-12px 0 20px;">
   Dinero que los clientes ya pagaron en itinerarios activos pero que todavía no se le ha pagado a proveedores (hoteles, aerolíneas, etc.) — no es utilidad, es dinero comprometido pendiente de aplicar.
