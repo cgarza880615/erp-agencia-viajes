@@ -35,6 +35,7 @@
           <th>Concepto</th>
           <th style="text-align:right;">Monto</th>
           <th>Método</th>
+          <th>Cuenta / caja</th>
           <th>Estado</th>
           <th></th>
         </tr>
@@ -48,6 +49,7 @@
             ${{ '{:,.2f}'.format(p.monto) }} <span style="font-size:0.72rem; color:var(--text2);">{{ moneda }}</span>
           </td>
           <td style="font-size:0.82rem; color:var(--text2);">{{ p.metodo_pago or '—' }}</td>
+          <td style="font-size:0.82rem; color:{{ 'var(--warning)' if not p.cuenta_destino else 'var(--text2)' }};">{{ p.cuenta_destino or 'Sin clasificar' }}</td>
           <td>
             {% if p.estado == 'CANCELADO' %}
               <span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
@@ -116,7 +118,8 @@
           </div>
           <div class="form-field">
             <label class="field-label">Método de pago</label>
-            <select name="metodo_pago" class="field-select" id="pp-metodo-{{ id_reserva }}">
+            <select name="metodo_pago" class="field-select" id="pp-metodo-{{ id_reserva }}"
+                    onchange="toggleCuentaDestino('pp-cuenta-destino-{{ id_reserva }}', this.value)">
               {% for m in ['Transferencia','Depósito bancario','Tarjeta de Crédito/Débito','Efectivo','Cheque'] %}
               <option value="{{ m }}">{{ m }}</option>
               {% endfor %}
@@ -125,6 +128,15 @@
           <div class="form-field">
             <label class="field-label">Fecha del pago</label>
             <input class="field-input" type="date" name="fecha_pago" value="{{ today }}">
+          </div>
+          <div class="form-field">
+            <label class="field-label">¿De qué caja/cuenta salió?</label>
+            <select name="cuenta_destino" class="field-select" id="pp-cuenta-destino-{{ id_reserva }}">
+              <option value="">Sin clasificar</option>
+              {% for cta in cuentas_destino %}
+              <option value="{{ cta }}">{{ cta }}</option>
+              {% endfor %}
+            </select>
           </div>
         </div>
         <div id="pago-prov-preview"></div>
@@ -199,6 +211,18 @@
         else { chk.value = '0'; }
       }
       return true;
+    }
+    // var (no const/let): esta sección también se reinserta por HTMX, y una
+    // redeclaración con const/let en el mismo scope global rompería en el 2do swap.
+    window.CUENTAS_POR_METODO = {{ cuentas_por_metodo | tojson }};
+    function toggleCuentaDestino(selectId, metodo) {
+      var sel = document.getElementById(selectId);
+      if (!sel) return;
+      var actual = sel.value;
+      var opciones = window.CUENTAS_POR_METODO[metodo] || window.CUENTAS_POR_METODO['Transferencia'] || [];
+      sel.innerHTML = '<option value="">Sin clasificar</option>' +
+        opciones.map(function(o) { return '<option value="' + o + '">' + o + '</option>'; }).join('');
+      if (opciones.indexOf(actual) !== -1) sel.value = actual;
     }
     function ppToggleCreditoAerolinea(rid, categoria) {
       var sel = document.getElementById('pp-metodo-' + rid);

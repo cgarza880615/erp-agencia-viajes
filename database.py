@@ -363,6 +363,14 @@ def verificar_tablas():
     except Exception as e:
         if "duplicate column" not in str(e).lower(): logging.error(f"ALTER flujo_caja id_extra: {e}")
 
+    # Dónde quedó físicamente el dinero (INGRESO) o de dónde salió (EGRESO): banco/terminal
+    # o en efectivo en poder de quién lo recibió. Independiente de metodo_pago y de quién lo
+    # registró (usuario_creador). Nullable: movimientos históricos anteriores a esta feature
+    # quedan "Sin clasificar".
+    try: cursor.execute("ALTER TABLE flujo_caja ADD COLUMN cuenta_destino TEXT")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower(): logging.error(f"ALTER flujo_caja cuenta_destino: {e}")
+
     cursor.execute('''CREATE TABLE IF NOT EXISTS sesiones_activas (
         usuario TEXT PRIMARY KEY,
         rol TEXT,

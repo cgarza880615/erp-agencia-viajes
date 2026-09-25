@@ -679,3 +679,33 @@ tfoot td {
   .stats-grid { grid-template-columns: 1fr; }
   .main-content { padding: 60px 10px 20px; }
 }
+
+/* ── Menú desplegable de recibo (cliente / interno) ─────── */
+.menu-recibo { position: relative; }
+.menu-recibo summary::-webkit-details-marker { display: none; }
+.menu-recibo summary:hover { background: var(--bg3); }
+.menu-recibo[open] summary { background: var(--primary-bg); }
+.menu-recibo-opciones {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  min-width: 160px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.menu-recibo-opciones a {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+.menu-recibo-opciones a:hover { background: var(--bg3); }

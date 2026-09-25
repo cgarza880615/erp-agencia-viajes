@@ -51,134 +51,143 @@ def _fecha_larga_es(fecha_str, hora_str=None):
     return texto
 
 
-def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cliente, monto, moneda, fecha_pago, metodo_pago, concepto, saldo_anterior, saldo_actual, operador, id_reserva, destino, logo_path, portal_url=None):
-    """Genera recibo PDF con DOS copias (Cliente y Control) con mejor diseño"""
+def generar_recibo_pdf(id_movimiento, nombre_cliente, telefono_cliente, email_cliente, monto, moneda, fecha_pago, metodo_pago, concepto, saldo_anterior, saldo_actual, operador, id_reserva, destino, logo_path, portal_url=None, copia="cliente", cuenta_destino=None):
+    """Genera el recibo como UNA página completa. `copia` controla cuál:
+    - "cliente": copia imprimible para el cliente, sin ningún dato interno.
+    - "interna": copia de control, agrega quién registró el cobro (nunca visible
+      para el cliente).
+    - "ambas" (compatibilidad): las dos, en 2 páginas del mismo PDF."""
 
     pdf_buffer = BytesIO()
     c = canvas.Canvas(pdf_buffer, pagesize=letter)
 
     width, height = letter
-    margen = 40
+    margen = 50
     linea_ancho = width - (2 * margen)
 
     azul_marca = HexColor("#0066cc")
-    gris_claro = HexColor("#f5f5f5")
     negro = HexColor("#000000")
 
     def dibujar_encabezado(y_start):
         if logo_path:
             try:
                 img = ImageReader(logo_path)
-                c.drawImage(img, margen + linea_ancho/2 - 25, y_start - 50, width=50, height=50, preserveAspectRatio=True, mask='auto')
+                c.drawImage(img, width/2 - 35, y_start - 70, width=70, height=70, preserveAspectRatio=True, mask='auto')
             except Exception:
                 pass
 
-        c.setFont("Helvetica-Bold", 14)
-        c.drawCentredString(width/2, y_start - 75, "TU AGENCIA DE VIAJES")
-        c.setFont("Helvetica-Bold", 12)
-        c.drawCentredString(width/2, y_start - 92, "RECIBO DE PAGO")
-        c.setFont("Helvetica", 9); c.setFillColor(HexColor("#666666"))
-        c.drawCentredString(width/2, y_start - 105, "Tel: 55 0000 0000  ·  tuagencia.com")
+        c.setFont("Helvetica-Bold", 16)
+        c.drawCentredString(width/2, y_start - 95, "TU AGENCIA DE VIAJES")
+        c.setFont("Helvetica-Bold", 13)
+        c.drawCentredString(width/2, y_start - 114, "RECIBO DE PAGO")
+        c.setFont("Helvetica", 9.5); c.setFillColor(HexColor("#666666"))
+        c.drawCentredString(width/2, y_start - 129, "Tel: 55 0000 0000  ·  tuagencia.com")
         c.setFillColor(negro)
-        return y_start - 118
+        return y_start - 145
 
-    def dibujar_recibo(y_inicio, tipo_copia, portal_url=None):
-        y = y_inicio
-
+    def dibujar_recibo(tipo_copia, es_interna):
+        y = height - 40
         y = dibujar_encabezado(y)
 
-        c.setFont("Helvetica-Oblique", 10)
+        c.setFont("Helvetica-Bold", 10.5)
+        c.setFillColor(azul_marca if es_interna else HexColor("#444444"))
         c.drawCentredString(width/2, y, f"COPIA {tipo_copia}")
-        y -= 12
+        c.setFillColor(negro)
+        y -= 16
 
-        c.setLineWidth(1)
+        c.setLineWidth(1.2)
         c.line(margen, y, margen + linea_ancho, y)
-        y -= 15
+        y -= 22
 
         folio = f"AGP-{str(fecha_pago)[:4]}-{int(id_movimiento):04d}"
 
-        c.setFont("Helvetica", 10)
+        c.setFont("Helvetica", 11)
         datos = [
-            (f"Folio: {folio}", f"Operador: {operador.capitalize()}"),
-            (f"Fecha: {fecha_pago}", f"Ref. interna: #{id_movimiento}"),
+            (f"Folio: {folio}", f"Ref. interna: #{id_movimiento}"),
+            (f"Fecha: {fecha_pago}", f"Itinerario Nº: {id_reserva}"),
             (f"Cliente: {nombre_cliente}", f"Teléfono: {telefono_cliente}"),
-            (f"Itinerario Nº: {id_reserva}", f"Destino: {destino}"),
+            (f"Destino: {destino}", ""),
         ]
+        for izq, der in datos:
+            c.drawString(margen, y, izq)
+            if der:
+                c.drawString(margen + linea_ancho/2, y, der)
+            y -= 17
 
-        for linea in datos:
-            if linea[1]:
-                c.drawString(margen, y, linea[0])
-                c.drawString(margen + linea_ancho/2, y, linea[1])
-            else:
-                c.drawString(margen, y, linea[0])
-            y -= 15
+        y -= 12
 
-        y -= 10
-
-        c.setFont("Helvetica-Bold", 12)
+        c.setFont("Helvetica-Bold", 13)
         c.drawString(margen, y, "MONTO PAGADO:")
-        y -= 15
-        c.setFont("Helvetica-Bold", 14)
+        c.setFont("Helvetica", 10.5)
+        c.drawString(margen + linea_ancho/2, y, f"Método: {metodo_pago}")
+        y -= 20
+        c.setFont("Helvetica-Bold", 18)
         c.setFillColor(azul_marca)
         c.drawString(margen + 15, y, f"${monto:,.2f} {moneda}")
         c.setFillColor(negro)
-        y -= 12
+        y -= 20
 
-        c.setFont("Helvetica", 9)
-        c.drawString(margen + linea_ancho/2, y + 20, f"Método: {metodo_pago}")
-
-        y -= 15
         c.setLineWidth(0.5)
         c.line(margen, y, margen + linea_ancho, y)
-        y -= 15
+        y -= 18
 
-        c.setFont("Helvetica", 9)
+        c.setFont("Helvetica", 10)
         c.drawString(margen, y, f"Saldo Anterior: ${saldo_anterior:,.2f} {moneda}")
-        y -= 12
+        y -= 15
         c.drawString(margen, y, f"Saldo Actual: ${saldo_actual:,.2f} {moneda}")
-        y -= 12
+        y -= 18
 
-        c.setFont("Helvetica-Bold", 9)
+        c.setFont("Helvetica-Bold", 10)
         c.drawString(margen, y, "CONCEPTO:")
-        y -= 12
-        c.setFont("Helvetica", 8)
+        y -= 14
+        c.setFont("Helvetica", 9)
         palabras = concepto.split()
         linea_actual = ""
-        linea_height = 10
         for palabra in palabras:
-            if c.stringWidth(linea_actual + " " + palabra, "Helvetica", 8) > linea_ancho - 20:
+            if c.stringWidth(linea_actual + " " + palabra, "Helvetica", 9) > linea_ancho - 20:
                 c.drawString(margen + 10, y, linea_actual)
-                y -= linea_height
+                y -= 12
                 linea_actual = palabra
             else:
                 linea_actual += " " + palabra if linea_actual else palabra
         if linea_actual:
             c.drawString(margen + 10, y, linea_actual)
+        y -= 30
 
-        y -= 25
+        # Datos internos: quién registró el cobro y a qué caja/cuenta cayó. SOLO
+        # aparecen en la copia interna; la copia del cliente nunca los incluye.
+        if es_interna:
+            c.setFillColor(HexColor("#f5f5f5"))
+            c.rect(margen, y - 26, linea_ancho, 42, fill=1, stroke=0)
+            c.setFillColor(azul_marca)
+            c.setFont("Helvetica-Bold", 10)
+            c.drawString(margen + 10, y, f"Cobro realizado por: {operador.capitalize()}")
+            y -= 16
+            c.drawString(margen + 10, y, f"Cayó a: {cuenta_destino or 'Sin clasificar'}")
+            c.setFillColor(negro)
+            y -= 40
 
-        c.setFont("Helvetica-Oblique", 8)
+        c.setFont("Helvetica-Oblique", 9)
         c.drawString(margen, y, "Sello / Firma del Operador")
-        if tipo_copia == "CLIENTE" and portal_url:
-            qr_size = 32
+        if not es_interna and portal_url:
+            qr_size = 75
             qr_x = margen + linea_ancho - qr_size
-            qr_y = y - qr_size + 7
+            qr_y = y - qr_size + 8
             _dibujar_qr_portal(c, qr_x, qr_y, qr_size, portal_url, arriba=False)
-        y -= 35
 
-        return y
+        # Pie de página
+        c.setFont("Helvetica-Oblique", 7.5); c.setFillColor(HexColor("#999999"))
+        c.drawCentredString(width/2, 40, f"Tu Agencia de Viajes  ·  tuagencia.com  ·  {folio}")
+        c.setFillColor(negro)
 
-    y_cliente = height - 20
-    y_cliente = dibujar_recibo(y_cliente, "CLIENTE", portal_url)
-
-    y_cliente -= 10
-    c.setLineWidth(1)
-    c.setDash([3, 3])
-    c.line(margen, y_cliente, margen + linea_ancho, y_cliente)
-    c.setDash([])
-
-    y_control = y_cliente - 30
-    y_control = dibujar_recibo(y_control, "CONTROL")
+    if copia == "interna":
+        dibujar_recibo("INTERNA", es_interna=True)
+    elif copia == "ambas":
+        dibujar_recibo("CLIENTE", es_interna=False)
+        c.showPage()
+        dibujar_recibo("INTERNA", es_interna=True)
+    else:
+        dibujar_recibo("CLIENTE", es_interna=False)
 
     c.save()
     return pdf_buffer.getvalue()

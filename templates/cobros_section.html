@@ -21,6 +21,7 @@
         <th>Monto</th>
         <th>Fecha</th>
         <th>Método</th>
+        <th>Cuenta / resguardo</th>
         <th></th>
       </tr>
     </thead>
@@ -31,12 +32,15 @@
         <td class="money money-positive">{{ c.monto | moneda(moneda) }}</td>
         <td>{{ c.fecha_pago }}</td>
         <td>{{ c.metodo_pago or '—' }}</td>
+        <td style="font-size:0.82rem; color:{{ 'var(--warning)' if not c.cuenta_destino else 'var(--text2)' }};">{{ c.cuenta_destino or 'Sin clasificar' }}</td>
         <td style="display:flex; gap:6px; align-items:center;">
-          <a href="/bitacora/{{ id_reserva }}/cobros/{{ c.id_movimiento }}/pdf"
-             target="_blank"
-             class="btn-icon"
-             title="Descargar recibo PDF"
-             style="text-decoration:none;">📄</a>
+          <details class="menu-recibo">
+            <summary title="Descargar recibo" style="cursor:pointer; list-style:none; padding:4px 6px; border-radius:6px;">📄</summary>
+            <div class="menu-recibo-opciones">
+              <a href="/bitacora/{{ id_reserva }}/cobros/{{ c.id_movimiento }}/pdf?copia=cliente" target="_blank">🖨️ Copia cliente</a>
+              <a href="/bitacora/{{ id_reserva }}/cobros/{{ c.id_movimiento }}/pdf?copia=interna" target="_blank">🔒 Copia interna</a>
+            </div>
+          </details>
           <button type="button" class="btn-icon-danger"
                   title="Anular cobro"
                   onclick="abrirAnular({{ c.id_movimiento }}, '{{ c.metodo_pago or '' }}')">✕</button>
@@ -111,7 +115,7 @@
           <div class="form-field">
             <label class="field-label">Método de pago</label>
             <select name="metodo_pago" class="field-select" id="sel-metodo-{{ id_reserva }}"
-                    onchange="toggleComision({{ id_reserva }}, this.value)">
+                    onchange="toggleComision({{ id_reserva }}, this.value); toggleCuentaDestino('cuenta-destino-{{ id_reserva }}', this.value)">
               <option value="Transferencia">Transferencia</option>
               <option value="Efectivo">Efectivo</option>
               <option value="Tarjeta de Crédito/Débito">Tarjeta de Crédito/Débito</option>
@@ -123,6 +127,16 @@
             <input class="field-input" type="number" name="comision_pct" id="inp-comision-{{ id_reserva }}" min="0" max="10"
                    step="0.1" value="3.5" placeholder="3.5"
                    oninput="actualizarPreviewComision({{ id_reserva }})">
+          </div>
+
+          <div class="form-field">
+            <label class="field-label">¿Dónde quedó el dinero?</label>
+            <select name="cuenta_destino" class="field-select" id="cuenta-destino-{{ id_reserva }}">
+              <option value="">Sin clasificar</option>
+              {% for cta in cuentas_destino %}
+              <option value="{{ cta }}">{{ cta }}</option>
+              {% endfor %}
+            </select>
           </div>
 
           <div class="form-field" style="grid-column: span 2;">
@@ -229,5 +243,19 @@ function abrirAnular(idMov, metodoPago) {
   form.setAttribute('action', url);
   htmx.process(form);
   modal.style.display = 'flex';
+}
+
+// var (no const/let) a propósito: esta sección se vuelve a insertar por HTMX cada
+// vez que se registra/anula un cobro, y una redeclaración con const/let en el mismo
+// scope global rompería con "already declared" en el segundo swap.
+window.CUENTAS_POR_METODO = {{ cuentas_por_metodo | tojson }};
+function toggleCuentaDestino(selectId, metodo) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const actual = sel.value;
+  const opciones = window.CUENTAS_POR_METODO[metodo] || window.CUENTAS_POR_METODO['Transferencia'] || [];
+  sel.innerHTML = '<option value="">Sin clasificar</option>' +
+    opciones.map(o => `<option value="${o}">${o}</option>`).join('');
+  if (opciones.includes(actual)) sel.value = actual;
 }
 </script>

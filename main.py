@@ -1762,7 +1762,7 @@ def _cobros_ctx(id_reserva):
     df_r = obtener_datos("SELECT moneda FROM reservas WHERE id_reserva=?", (id_reserva,))
     moneda = df_r.iloc[0]["moneda"] if not df_r.empty else "MXN"
     df_cobros = obtener_datos(
-        """SELECT id_movimiento, concepto, monto, fecha_pago, metodo_pago
+        """SELECT id_movimiento, concepto, monto, fecha_pago, metodo_pago, cuenta_destino
            FROM flujo_caja
            WHERE id_reserva=? AND tipo_movimiento='INGRESO' AND estado='ACTIVO'
            ORDER BY id_movimiento""",
@@ -1780,6 +1780,8 @@ def _cobros_ctx(id_reserva):
         "plan_pagos": df_plan.to_dict("records"),
         "saldo": saldo,
         "today": str(now_local().date()),
+        "cuentas_destino": CUENTAS_SIMPLE_DEFAULT,
+        "cuentas_por_metodo": CUENTAS_POR_METODO,
     }
 
 def _cobros_html(request, id_reserva):
@@ -1889,6 +1891,7 @@ async def registrar_cobro(request: Request, id_reserva: int):
     notas       = (form.get("notas") or "").strip()
     pct_com     = _f("comision_pct")
     ajuste_plan = (form.get("ajuste_plan") or "ninguno").strip()
+    cuenta_destino = _resolver_cuenta_destino(form.get("cuenta_destino"), metodo)
 
     if tipo == "Anticipo":
         concepto = f"[{metodo}] Anticipo Inicial"
@@ -1905,8 +1908,8 @@ async def registrar_cobro(request: Request, id_reserva: int):
     moneda = df_r.iloc[0]["moneda"] if not df_r.empty else "MXN"
 
     ops = [(
-        "INSERT INTO flujo_caja (id_reserva, tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, fecha_pago, usuario_creador, metodo_pago, fecha_creacion) VALUES (?, 'INGRESO', 'NO APLICA', ?, ?, ?, ?, ?, ?, ?, ?)",
-        (id_reserva, categoria, concepto, monto, moneda, fecha, usuario, metodo, str(now_local().date()))
+        "INSERT INTO flujo_caja (id_reserva, tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, fecha_pago, usuario_creador, metodo_pago, cuenta_destino, fecha_creacion) VALUES (?, 'INGRESO', 'NO APLICA', ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (id_reserva, categoria, concepto, monto, moneda, fecha, usuario, metodo, cuenta_destino, str(now_local().date()))
     )]
     if metodo == "Tarjeta de Crédito/Débito" and pct_com > 0:
         comision = round(monto * pct_com / 100, 2)
@@ -2022,13 +2025,15 @@ async def anular_cobro(request: Request, id_reserva: int, id_mov: int):
 
 
 @app.get("/bitacora/{id_reserva}/cobros/{id_mov}/pdf")
-async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
+async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int, copia: str = "cliente"):
+    if copia not in ("cliente", "interna"):
+        copia = "cliente"
     if not usuario_activo(request):
         return RedirectResponse(url="/login")
     import re as _re_pdf
     from pdf_engine import generar_recibo_pdf as _gen_recibo
     df_mov = obtener_datos(
-        "SELECT id_movimiento, concepto, monto, moneda, fecha_pago, metodo_pago, usuario_creador "
+        "SELECT id_movimiento, concepto, monto, moneda, fecha_pago, metodo_pago, usuario_creador, cuenta_destino "
         "FROM flujo_caja WHERE id_movimiento=? AND id_reserva=? AND tipo_movimiento='INGRESO'",
         (id_mov, id_reserva)
     )
@@ -2069,13 +2074,43 @@ async def pdf_recibo_cobro(request: Request, id_reserva: int, id_mov: int):
         saldo_anterior=saldo_anterior,
         saldo_actual=saldo_actual,
         operador=mov.get("usuario_creador") or usuario_activo(request),
+        cuenta_destino=mov.get("cuenta_destino"),
         id_reserva=id_reserva,
         destino=res["destino"],
         logo_path=LOGO_PATH,
-        portal_url=portal_url
+        portal_url=portal_url,
+        copia=copia,
     )
+    sufijo = "" if copia == "cliente" else "-interno"
     return FastAPIResponse(content=pdf, media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename={folio}.pdf"})
+        headers={"Content-Disposition": f"inline; filename={folio}{sufijo}.pdf"})
+
+
+# ─── Custodia del dinero: en qué cuenta/persona quedó cada cobro o de dónde
+# salió cada pago ───────────────────────────────────────────────────────────
+OPERADORAS = ["Caja Agente 1", "Caja Agente 2", "Caja Agente 3"]
+CUENTAS_DESTINO = ["Banco (Cuenta 1)", "Banco (Cuenta 2)"] + OPERADORAS
+
+# Con Tarjeta solo tiene sentido preguntar la terminal (Cuenta 1 o Cuenta 2); con
+# Efectivo o Transferencia se puede elegir cualquiera de las 5.
+CUENTAS_POR_METODO = {
+    "Tarjeta de Crédito/Débito": ["Banco (Cuenta 1)", "Banco (Cuenta 2)"],
+    "Efectivo": CUENTAS_DESTINO,
+    "Transferencia": CUENTAS_DESTINO,
+}
+# Métodos menos comunes (Cheque, Depósito bancario, crédito de aerolínea...) muestran las 5.
+CUENTAS_SIMPLE_DEFAULT = CUENTAS_POR_METODO["Transferencia"]
+
+
+def _resolver_cuenta_destino(cuenta_simple, metodo_pago):
+    """Valida que la cuenta elegida en el formulario sea una de las 5 reales.
+    Ya no depende de metodo_pago para nada (se deja el parámetro para no tener que
+    tocar las llamadas existentes) — cada persona/cuenta es un solo bucket sin
+    importar cómo le llegó el dinero."""
+    cuenta_simple = (cuenta_simple or "").strip()
+    if cuenta_simple in CUENTAS_DESTINO:
+        return cuenta_simple
+    return None
 
 
 # ─── Pagos a Proveedores (HTMX) ───────────────────────────────────────────────
@@ -2181,7 +2216,7 @@ def _pagos_prov_ctx(id_reserva):
     nombre_grupo = df_r.iloc[0]["nombre_grupo"] if es_de_grupo else None
     id_grupo_reserva = int(df_r.iloc[0]["id_grupo"]) if es_de_grupo else None
     df = obtener_datos(
-        "SELECT id_movimiento, categoria, concepto, monto, moneda, fecha_pago, metodo_pago, estado "
+        "SELECT id_movimiento, categoria, concepto, monto, moneda, fecha_pago, metodo_pago, cuenta_destino, estado "
         "FROM flujo_caja WHERE id_reserva=? AND tipo_movimiento='EGRESO' "
         "AND tipo_egreso='COSTO DIRECTO VIAJE' "
         "AND categoria NOT IN ('Comisiones Bancarias','Deuda Incobrable','Papelería y Otros') "
@@ -2193,6 +2228,8 @@ def _pagos_prov_ctx(id_reserva):
         "moneda": moneda,
         "pagos_prov_lista": df.to_dict("records") if not df.empty else [],
         "categorias_pago_prov": CATEGORIAS_PAGO_PROV,
+        "cuentas_destino": CUENTAS_SIMPLE_DEFAULT,
+        "cuentas_por_metodo": CUENTAS_POR_METODO,
         "today": str(now_local().date()),
         # El semáforo/registro de pago a proveedor individual se desactiva para reservas
         # de grupo — ese control vive a nivel de grupo (evita alertas falsas duplicadas
@@ -2326,6 +2363,7 @@ async def registrar_pago_proveedor(request: Request, id_reserva: int):
     fecha       = (form.get("fecha_pago") or hoy).strip()
     metodo      = (form.get("metodo_pago") or "Transferencia").strip()
     pago_final  = form.get("pago_final") == "1"
+    cuenta_destino = _resolver_cuenta_destino(form.get("cuenta_destino"), metodo)
     try:
         monto = float(form.get("monto") or 0)
     except Exception:
@@ -2350,9 +2388,9 @@ async def registrar_pago_proveedor(request: Request, id_reserva: int):
     if monto > 0 and categoria:
         id_mov_nuevo = ejecutar_insert(
             "INSERT INTO flujo_caja (id_reserva, tipo_movimiento, tipo_egreso, categoria, concepto, "
-            "monto, moneda, fecha_pago, metodo_pago, estado, usuario_creador, fecha_creacion) "
-            "VALUES (?, 'EGRESO', 'COSTO DIRECTO VIAJE', ?, ?, ?, ?, ?, ?, 'ACTIVO', ?, ?)",
-            (id_reserva, categoria, concepto, monto, moneda, fecha, metodo, usuario, hoy)
+            "monto, moneda, fecha_pago, metodo_pago, cuenta_destino, estado, usuario_creador, fecha_creacion) "
+            "VALUES (?, 'EGRESO', 'COSTO DIRECTO VIAJE', ?, ?, ?, ?, ?, ?, ?, 'ACTIVO', ?, ?)",
+            (id_reserva, categoria, concepto, monto, moneda, fecha, metodo, cuenta_destino, usuario, hoy)
         )
         if id_mov_nuevo:
             registrar_cambio(id_reserva, "PAGO PROVEEDOR",
@@ -4666,6 +4704,183 @@ async def credito_aerolinea_ajustar(request: Request):
     return RedirectResponse(url="/libro-diario", status_code=303)
 
 
+# ─── Corte de Caja: en qué cuenta/persona quedó cada peso, y cuadre contra
+# el Libro Diario (custodia del dinero) ────────────────────────────────────
+def _saldos_por_cuenta():
+    df = obtener_datos(
+        "SELECT cuenta_destino, tipo_movimiento, COALESCE(SUM(monto),0) as total "
+        "FROM flujo_caja WHERE estado='ACTIVO' AND moneda='MXN' "
+        "GROUP BY cuenta_destino, tipo_movimiento"
+    )
+    saldos = {cta: 0.0 for cta in CUENTAS_DESTINO}
+    saldos[None] = 0.0  # "Sin clasificar" — movimientos históricos, o con un valor
+                         # de un catálogo viejo que ya no existe.
+    for _, r in df.iterrows():
+        cta_raw = r["cuenta_destino"] if pd.notna(r["cuenta_destino"]) else None
+        cta = cta_raw if cta_raw in CUENTAS_DESTINO else None
+        signo = 1 if r["tipo_movimiento"] == "INGRESO" else -1
+        saldos[cta] = saldos.get(cta, 0.0) + signo * float(r["total"])
+    saldos = {k: round(v, 2) for k, v in saldos.items()}
+
+    bancos = ["Banco (Cuenta 1)", "Banco (Cuenta 2)"]
+    personas = OPERADORAS
+    total_general = round(sum(saldos[c] for c in CUENTAS_DESTINO) + saldos[None], 2)
+
+    # Cotejo contra Libro Diario: independiente del desglose por cuenta, "todo lo que
+    # ha entrado" menos "todo lo que ya se aplicó/pagó" (todo el histórico, sin filtro
+    # de período) SIEMPRE debe cuadrar exacto con total_general de arriba — es la
+    # misma tabla sumada de dos formas distintas. Si algún día no cuadra, es señal de
+    # un bug real (un movimiento que se está sumando distinto en un lado que en otro).
+    df_tot = obtener_datos(
+        "SELECT tipo_movimiento, COALESCE(SUM(monto),0) as total FROM flujo_caja "
+        "WHERE estado='ACTIVO' AND moneda='MXN' GROUP BY tipo_movimiento"
+    )
+    ing_hist = float(df_tot.loc[df_tot["tipo_movimiento"] == "INGRESO", "total"].sum()) if not df_tot.empty else 0.0
+    egr_hist = float(df_tot.loc[df_tot["tipo_movimiento"] == "EGRESO", "total"].sum()) if not df_tot.empty else 0.0
+    cotejo_total = round(ing_hist - egr_hist, 2)
+    diferencia = round(total_general - cotejo_total, 2)
+
+    # Margen de tolerancia: $100 por caja/corte antes de considerarlo un problema real
+    # (redondeos, centavos de comisión, etc. no deberían disparar una alerta roja).
+    # Amarillo = sobra dinero, rojo = falta, verde = cuadra.
+    MARGEN_ERROR_CAJA = 100.0
+    if abs(diferencia) <= MARGEN_ERROR_CAJA:
+        cotejo_estado = "cuadra"
+    elif diferencia > 0:
+        cotejo_estado = "sobra"
+    else:
+        cotejo_estado = "falta"
+
+    return {
+        "detalle": [(c, saldos[c]) for c in CUENTAS_DESTINO],
+        "sin_clasificar": saldos[None],
+        "total_bancos": round(sum(saldos[c] for c in bancos), 2),
+        "total_efectivo": round(sum(saldos[c] for c in personas), 2),
+        "total_general": total_general,
+        "total_ingresos_historico": round(ing_hist, 2),
+        "total_egresos_historico": round(egr_hist, 2),
+        "cotejo_diferencia": diferencia,
+        "cotejo_estado": cotejo_estado,
+    }
+
+
+@app.get("/corte-caja", response_class=HTMLResponse)
+async def corte_caja_view(request: Request):
+    if not usuario_activo(request):
+        return RedirectResponse(url="/login")
+    df_mov = obtener_datos(
+        "SELECT id_movimiento, tipo_movimiento, categoria, concepto, monto, cuenta_destino, "
+        "fecha_pago, usuario_creador, estado FROM flujo_caja "
+        "WHERE categoria IN ('Traspaso entre Cuentas','Ajuste de Caja') ORDER BY id_movimiento DESC LIMIT 40"
+    )
+    flash = request.session.pop("flash", None)
+    return templates.TemplateResponse(request, "corte_caja.html", ctx(request, {
+        "active": "corte_caja",
+        "saldos": _saldos_por_cuenta(),
+        "cuentas_destino": CUENTAS_DESTINO,
+        "traspasos": df_mov.to_dict("records") if not df_mov.empty else [],
+        "today": str(now_local().date()),
+        "flash": flash,
+    }))
+
+
+@app.post("/corte-caja/traspaso", response_class=HTMLResponse)
+async def corte_caja_traspaso(request: Request):
+    if not usuario_activo(request):
+        return RedirectResponse(url="/login")
+    form = dict(await request.form())
+    usuario = usuario_activo(request)
+    hoy = str(now_local().date())
+
+    origen  = (form.get("cuenta_origen") or "").strip()
+    destino = (form.get("cuenta_destino") or "").strip()
+    motivo  = (form.get("motivo") or "").strip()
+    fecha   = (form.get("fecha") or hoy).strip()
+    try:
+        monto = float(form.get("monto") or 0)
+    except Exception:
+        monto = 0.0
+
+    if monto > 0 and origen and destino and origen != destino:
+        concepto_base = f"Traspaso {origen} → {destino}" + (f" — {motivo}" if motivo else "")
+        # Dos movimientos ligados (EGRESO en origen + INGRESO en destino): el total del
+        # negocio no cambia, solo se mueve de dónde a dónde — mismo patrón que la comisión
+        # bancaria automática (id_movimiento_vinculado + last_insert_rowid() en la misma
+        # transacción) para poder anular ambos juntos si se registró mal.
+        ejecutar_transaccion([
+            ("INSERT INTO flujo_caja (tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, "
+             "fecha_pago, cuenta_destino, estado, usuario_creador, fecha_creacion) "
+             "VALUES ('EGRESO','TRASPASO INTERNO','Traspaso entre Cuentas',?,?,'MXN',?,?,'ACTIVO',?,?)",
+             (concepto_base, monto, fecha, origen, usuario, now_local().isoformat())),
+            ("INSERT INTO flujo_caja (tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, "
+             "fecha_pago, cuenta_destino, estado, usuario_creador, fecha_creacion, id_movimiento_vinculado) "
+             "VALUES ('INGRESO','NO APLICA','Traspaso entre Cuentas',?,?,'MXN',?,?,'ACTIVO',?,?, (SELECT last_insert_rowid()))",
+             (concepto_base, monto, fecha, destino, usuario, now_local().isoformat())),
+        ])
+        request.session["flash"] = {"tipo": "ok", "texto": f"✅ Traspaso de ${monto:,.2f} registrado: {origen} → {destino}."}
+    else:
+        request.session["flash"] = {"tipo": "error", "texto": "⚠️ Revisa el monto y que origen/destino sean distintos."}
+    return RedirectResponse(url="/corte-caja", status_code=303)
+
+
+@app.post("/corte-caja/ajuste", response_class=HTMLResponse)
+async def corte_caja_ajuste(request: Request):
+    """Ajuste manual de saldo por cuenta — SOLO admin. Sirve para cuando quien
+    maneja la caja da su corte real (cuánto tiene de verdad hoy) y no cuadra con lo
+    que el sistema calculó a partir del histórico (que puede estar mal clasificado o
+    incompleto hacia atrás). No se reescribe el histórico: se agrega un movimiento
+    normal, auditable en Libro Diario, con su propia categoría ('Ajuste de Caja') —
+    nunca se disfraza de un cobro o pago real."""
+    redir = _require_admin(request)
+    if redir:
+        return redir
+    form = dict(await request.form())
+    usuario = usuario_activo(request)
+    hoy = str(now_local().date())
+
+    cuenta = (form.get("cuenta") or "").strip()
+    tipo   = (form.get("tipo") or "").strip()
+    motivo = (form.get("motivo") or "").strip()
+    confirmar = form.get("confirmar") == "1"
+    try:
+        monto = float(form.get("monto") or 0)
+    except Exception:
+        monto = 0.0
+
+    if confirmar and cuenta and motivo and monto > 0 and tipo in ("sumar", "restar"):
+        tipo_mov = "INGRESO" if tipo == "sumar" else "EGRESO"
+        concepto = f"[Ajuste manual de caja] {motivo}"
+        ejecutar_comando(
+            "INSERT INTO flujo_caja (tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, "
+            "fecha_pago, cuenta_destino, estado, usuario_creador, fecha_creacion) "
+            "VALUES (?,'NO APLICA','Ajuste de Caja',?,?,'MXN',?,?,'ACTIVO',?,?)",
+            (tipo_mov, concepto, monto, hoy, cuenta, usuario, now_local().isoformat())
+        )
+        request.session["flash"] = {"tipo": "ok", "texto": f"✅ Ajuste aplicado a {cuenta}: {'+' if tipo=='sumar' else '-'}${monto:,.2f}."}
+    else:
+        request.session["flash"] = {"tipo": "error", "texto": "⚠️ Faltó cuenta, monto, motivo o la confirmación."}
+    return RedirectResponse(url="/corte-caja", status_code=303)
+
+
+@app.post("/corte-caja/traspaso/{id_movimiento}/anular", response_class=HTMLResponse)
+async def corte_caja_traspaso_anular(request: Request, id_movimiento: int):
+    if not usuario_activo(request):
+        return RedirectResponse(url="/login")
+    usuario = usuario_activo(request)
+    df = obtener_datos(
+        "SELECT id_movimiento FROM flujo_caja WHERE id_movimiento=? OR id_movimiento_vinculado=?",
+        (id_movimiento, id_movimiento)
+    )
+    ids = [int(r["id_movimiento"]) for _, r in df.iterrows()]
+    for mid in ids:
+        ejecutar_comando(
+            "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_movimiento=? AND estado='ACTIVO'",
+            (f"Traspaso anulado por {usuario}", mid)
+        )
+    request.session["flash"] = {"tipo": "ok", "texto": "Traspaso anulado."}
+    return RedirectResponse(url="/corte-caja", status_code=303)
+
+
 @app.get("/libro-diario", response_class=HTMLResponse)
 async def libro_diario(request: Request):
     if not usuario_activo(request):
@@ -4866,7 +5081,7 @@ async def ingresos_oficina(request: Request):
     # viven dentro de cada itinerario y en el Libro Diario consolidado.
     # 'Crédito Aerolínea Generado' también tiene id_reserva NULL pero no es capital de
     # oficina — se audita en Libro Diario, no aquí (ver _saldo_credito_aerolinea_total).
-    where = ["fc.tipo_movimiento = 'INGRESO'", "fc.id_reserva IS NULL", "fc.categoria != 'Crédito Aerolínea Generado'"]
+    where = ["fc.tipo_movimiento = 'INGRESO'", "fc.id_reserva IS NULL", "fc.categoria != 'Crédito Aerolínea Generado'", "fc.categoria != 'Traspaso entre Cuentas'", "fc.categoria != 'Ajuste de Caja'"]
     if f_ini: where.append("fc.fecha_pago >= ?"); args.append(f_ini)
     if f_fin: where.append("fc.fecha_pago <= ?"); args.append(f_fin)
     if filtro_cat: where.append("fc.categoria = ?"); args.append(filtro_cat)
@@ -4995,17 +5210,23 @@ async def egresos_oficina_view(request: Request):
     elif periodo == "todo":
         f_ini = f_fin = ""
 
-    where, args = ["1=1"], []
-    if f_ini: where.append("fecha_egreso >= ?"); args.append(f_ini)
-    if f_fin: where.append("fecha_egreso <= ?"); args.append(f_fin)
+    where, args = ["tipo_movimiento='EGRESO'", "tipo_egreso='GASTO OPERATIVO OFICINA'"], []
+    if f_ini: where.append("fecha_pago >= ?"); args.append(f_ini)
+    if f_fin: where.append("fecha_pago <= ?"); args.append(f_fin)
     where_sql = "WHERE " + " AND ".join(where)
 
+    # flujo_caja es la fuente única de verdad (igual que Libro Diario) — antes esta
+    # página leía de una tabla espejo (egresos_oficina) que solo se llenaba al capturar
+    # desde aquí; los egresos capturados desde otras interfaces (que solo escriben
+    # flujo_caja) nunca aparecían aquí, aunque sí en el Libro Diario.
     df = obtener_datos(
-        f"SELECT id_egreso, tipo_egreso, categoria, concepto, monto, metodo_pago, fecha_egreso, estado, usuario_creador, divisor FROM egresos_oficina {where_sql} ORDER BY fecha_egreso DESC, id_egreso DESC",
+        f"SELECT id_movimiento, tipo_egreso, categoria, concepto, monto, metodo_pago, cuenta_destino, "
+        f"fecha_pago AS fecha_egreso, estado, usuario_creador, divisor FROM flujo_caja {where_sql} "
+        f"ORDER BY fecha_pago DESC, id_movimiento DESC",
         tuple(args)
     )
     registros = df.to_dict("records") if not df.empty else []
-    total_activo = sum(r["monto"] for r in registros if r["estado"] == "ACTIVO")
+    total_activo = round(sum(r["monto"] for r in registros if r["estado"] == "ACTIVO"), 2)
 
     # Agrupado por categoría (activos)
     from collections import defaultdict
@@ -5013,7 +5234,7 @@ async def egresos_oficina_view(request: Request):
     for r in registros:
         if r["estado"] == "ACTIVO":
             por_categoria[r["categoria"] or r["tipo_egreso"] or "Sin categoría"] += float(r["monto"] or 0)
-    por_categoria = sorted(por_categoria.items(), key=lambda x: -x[1])
+    por_categoria = sorted(((c, round(t, 2)) for c, t in por_categoria.items()), key=lambda x: -x[1])
 
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(request, "egresos_oficina.html", ctx(request, {
@@ -5022,6 +5243,8 @@ async def egresos_oficina_view(request: Request):
         "total_activo": total_activo,
         "por_categoria": por_categoria,
         "categorias": CATEGORIAS_EGRESO_OF,
+        "cuentas_destino": CUENTAS_SIMPLE_DEFAULT,
+        "cuentas_por_metodo": CUENTAS_POR_METODO,
         "periodo": periodo,
         "f_ini": f_ini,
         "f_fin": f_fin,
@@ -5046,50 +5269,40 @@ async def egresos_oficina_post(request: Request):
     metodo         = (form.get("metodo_pago") or "").strip()
     fecha          = (form.get("fecha_egreso") or hoy).strip()
     divisor        = (form.get("divisor") or "").strip()
+    cuenta_destino = _resolver_cuenta_destino(form.get("cuenta_destino"), metodo)
 
     if monto > 0 and categoria:
+        # flujo_caja es la única tabla de escritura — ya no hay tabla espejo
+        # (egresos_oficina) que pueda quedar desincronizada.
         ejecutar_comando(
-            "INSERT INTO egresos_oficina (tipo_egreso, categoria, concepto, monto, metodo_pago, fecha_egreso, estado, usuario_creador, divisor, fecha_creacion) VALUES ('GASTO OPERATIVO OFICINA',?,?,?,?,?,'ACTIVO',?,?,?)",
-            (categoria, concepto_final, monto, metodo or None, fecha, usuario, divisor or None, now_local().isoformat())
-        )
-        # También registrar en flujo_caja para el libro diario
-        ejecutar_comando(
-            "INSERT INTO flujo_caja (tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, fecha_pago, metodo_pago, estado, usuario_creador, fecha_creacion) VALUES ('EGRESO','GASTO OPERATIVO OFICINA',?,?,?,'MXN',?,?,'ACTIVO',?,?)",
-            (categoria, concepto_final, monto, fecha, metodo or None, usuario, now_local().isoformat())
+            "INSERT INTO flujo_caja (tipo_movimiento, tipo_egreso, categoria, concepto, monto, moneda, fecha_pago, metodo_pago, cuenta_destino, estado, usuario_creador, divisor, fecha_creacion) VALUES ('EGRESO','GASTO OPERATIVO OFICINA',?,?,?,'MXN',?,?,?,'ACTIVO',?,?,?)",
+            (categoria, concepto_final, monto, fecha, metodo or None, cuenta_destino, usuario, divisor or None, now_local().isoformat())
         )
         request.session["flash"] = {"tipo": "ok", "texto": f"✅ Egreso de ${monto:,.2f} registrado."}
 
     return RedirectResponse(url="/egresos", status_code=303)
 
 
-@app.post("/egresos/{id_egreso}/anular", response_class=HTMLResponse)
-async def egreso_anular(request: Request, id_egreso: int):
+@app.post("/egresos/{id_movimiento}/anular", response_class=HTMLResponse)
+async def egreso_anular(request: Request, id_movimiento: int):
     if not usuario_activo(request):
         return RedirectResponse(url="/login")
     form = dict(await request.form())
     motivo = (form.get("motivo") or "Sin motivo").strip()
+    usuario = usuario_activo(request)
 
-    # Leer el egreso antes de anular, para cancelar su espejo en flujo_caja
     df_eg = obtener_datos(
-        "SELECT categoria, concepto, monto, fecha_egreso FROM egresos_oficina WHERE id_egreso=?",
-        (id_egreso,)
+        "SELECT monto, concepto, estado FROM flujo_caja WHERE id_movimiento=? AND tipo_egreso='GASTO OPERATIVO OFICINA'",
+        (id_movimiento,)
     )
-    ejecutar_comando(
-        "UPDATE egresos_oficina SET estado='CANCELADO' WHERE id_egreso=?",
-        (id_egreso,)
-    )
-    # Cancelar también el movimiento espejo en flujo_caja (LIMIT 1 por si hubiera duplicados)
-    if not df_eg.empty:
-        eg = df_eg.iloc[0]
+    if not df_eg.empty and df_eg.iloc[0]["estado"] == "ACTIVO":
         ejecutar_comando(
-            """UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=?
-               WHERE id_movimiento = (
-                   SELECT id_movimiento FROM flujo_caja
-                   WHERE tipo_egreso='GASTO OPERATIVO OFICINA'
-                     AND monto=? AND fecha_pago=? AND categoria=? AND concepto=? AND estado='ACTIVO'
-                   LIMIT 1
-               )""",
-            (motivo, float(eg["monto"]), eg["fecha_egreso"], eg["categoria"], eg["concepto"])
+            "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_movimiento=?",
+            (motivo, id_movimiento)
+        )
+        ejecutar_comando(
+            "INSERT INTO anulaciones_audit (id_movimiento, tipo_movimiento, monto_anulado, usuario_anulo, fecha_anulacion, razon_anulacion, movimiento_original) VALUES (?,?,?,?,?,?,?)",
+            (id_movimiento, "EGRESO", float(df_eg.iloc[0]["monto"] or 0), usuario, str(now_local().date()), motivo, df_eg.iloc[0]["concepto"])
         )
     request.session["flash"] = {"tipo": "error", "texto": "Egreso anulado."}
     return RedirectResponse(url="/egresos", status_code=303)
@@ -5229,17 +5442,18 @@ async def egresos_exportar(request: Request):
     params = dict(request.query_params)
     f_ini, f_fin = _get_periodo_fechas(params, hoy)
 
-    where, args = ["1=1"], []
-    if f_ini: where.append("fecha_egreso >= ?"); args.append(f_ini)
-    if f_fin: where.append("fecha_egreso <= ?"); args.append(f_fin)
-    where_sql = "WHERE " + " AND ".join(where) + " AND estado='ACTIVO'"
+    where = ["tipo_movimiento='EGRESO'", "tipo_egreso='GASTO OPERATIVO OFICINA'", "estado='ACTIVO'"]
+    args = []
+    if f_ini: where.append("fecha_pago >= ?"); args.append(f_ini)
+    if f_fin: where.append("fecha_pago <= ?"); args.append(f_fin)
+    where_sql = "WHERE " + " AND ".join(where)
 
     df = obtener_datos(f"""
-        SELECT fecha_egreso AS Fecha, categoria AS Categoria, concepto AS Concepto,
+        SELECT fecha_pago AS Fecha, categoria AS Categoria, concepto AS Concepto,
                monto AS Monto, metodo_pago AS Metodo_Pago, divisor AS Divide_Entre,
                estado AS Estado, usuario_creador AS Usuario
-        FROM egresos_oficina {where_sql}
-        ORDER BY fecha_egreso DESC, id_egreso DESC
+        FROM flujo_caja {where_sql}
+        ORDER BY fecha_pago DESC, id_movimiento DESC
     """, tuple(args))
     return _excel_response(df, f"egresos_oficina_{hoy}.xlsx")
 

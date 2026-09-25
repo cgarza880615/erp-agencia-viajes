@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% block title %}Corte de Caja — ERP Agencia de Viajes{% endblock %}
+
+{% block content %}
+
+<div style="display:flex; align-items:center; gap:16px; margin-bottom:24px; flex-wrap:wrap;">
+  <h1 class="page-title" style="margin:0; flex:1;">🏦 Corte de Caja</h1>
+</div>
+
+<p style="color:var(--text2); font-size:0.875rem; margin:-14px 0 20px;">
+  Cuánto dinero debería haber en cada cuenta o en poder de cada quién, según lo que se ha
+  capturado en cobros, pagos a proveedor, egresos de oficina y traspasos.
+</p>
+
+{% if flash %}
+<div class="alerta-inline alerta-{% if flash.tipo == 'ok' %}warning{% else %}critica{% endif %}"
+     style="margin-bottom:16px;">{{ flash.texto }}</div>
+{% endif %}
+
+<!-- Cotejo contra Libro Diario -->
+<div class="card" style="margin-bottom:20px; border:1px solid var({{ 'primary' if saldos.cotejo_estado == 'cuadra' else ('warning' if saldos.cotejo_estado == 'sobra' else 'danger') }});">
+  <div class="card-header">🔍 Cotejo contra Libro Diario <span style="font-weight:400; color:var(--text2); font-size:0.75rem;">(margen de tolerancia: $100 por caja)</span></div>
+  <div class="card-body" style="display:flex; gap:24px; flex-wrap:wrap; align-items:center;">
+    <div>
+      <div style="font-size:0.78rem; color:var(--text2);">Todo lo recibido (histórico)</div>
+      <div style="font-size:1.1rem; font-weight:700;" class="money-positive">${{ '{:,.2f}'.format(saldos.total_ingresos_historico) }}</div>
+    </div>
+    <div style="font-size:1.3rem; color:var(--text2);">−</div>
+    <div>
+      <div style="font-size:0.78rem; color:var(--text2);">Todo lo ya aplicado/pagado</div>
+      <div style="font-size:1.1rem; font-weight:700;" class="money-negative">${{ '{:,.2f}'.format(saldos.total_egresos_historico) }}</div>
+    </div>
+    <div style="font-size:1.3rem; color:var(--text2);">=</div>
+    <div>
+      <div style="font-size:0.78rem; color:var(--text2);">Debería estar repartido en las cajas</div>
+      <div style="font-size:1.1rem; font-weight:700;">${{ '{:,.2f}'.format(saldos.total_ingresos_historico - saldos.total_egresos_historico) }}</div>
+    </div>
+    <div style="margin-left:auto; text-align:right;">
+      {% if saldos.cotejo_estado == 'cuadra' %}
+      <span class="badge badge-green">✅ Cuadra (diferencia ${{ '{:,.2f}'.format(saldos.cotejo_diferencia) }})</span>
+      {% elif saldos.cotejo_estado == 'sobra' %}
+      <span class="badge badge-yellow">🟡 Sobra ${{ '{:,.2f}'.format(saldos.cotejo_diferencia) }} — hay más de lo esperado</span>
+      {% else %}
+      <span class="badge badge-red">🔴 Falta ${{ '{:,.2f}'.format(-saldos.cotejo_diferencia) }} — revisar</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- KPIs generales -->
+<div class="stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; margin-bottom:20px;">
+  <div class="stat-card blue">
+    <div class="icon">🏦</div>
+    <div class="value">${{ '{:,.2f}'.format(saldos.total_bancos) }}</div>
+    <div class="label">En cuentas bancarias/digitales</div>
+  </div>
+  <div class="stat-card yellow">
+    <div class="icon">💵</div>
+    <div class="value">${{ '{:,.2f}'.format(saldos.total_efectivo) }}</div>
+    <div class="label">En poder de quien maneja la caja</div>
+  </div>
+  <div class="stat-card green">
+    <div class="icon">💰</div>
+    <div class="value">${{ '{:,.2f}'.format(saldos.total_general) }}</div>
+    <div class="label">Total (incluye sin clasificar)</div>
+  </div>
+  {% if saldos.sin_clasificar != 0 %}
+  <div class="stat-card red">
+    <div class="icon">❓</div>
+    <div class="value">${{ '{:,.2f}'.format(saldos.sin_clasificar) }}</div>
+    <div class="label">Sin clasificar (movimientos viejos o sin capturar)</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Detalle por cuenta -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">💼 Saldo por cuenta / persona</div>
+  <div class="card-body" style="padding:0;">
+    <table style="width:100%;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">Cuenta / resguardo</th>
+          <th style="text-align:right; padding-right:20px;">Saldo estimado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cta, saldo in saldos.detalle %}
+        <tr>
+          <td style="padding-left:20px; font-size:0.9rem;">
+            {{ '🏦' if cta in ('Banco (Cuenta 1)', 'Banco (Cuenta 2)') else '💵' }} {{ cta }}
+          </td>
+          <td style="text-align:right; padding-right:20px; font-weight:600; font-size:0.95rem;"
+              class="{{ 'money-negative' if saldo < 0 else 'money-positive' }}">
+            ${{ '{:,.2f}'.format(saldo) }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Registrar traspaso -->
+<div class="card" style="margin-bottom:20px;">
+  <div class="card-header">🔄 Registrar traspaso entre cuentas</div>
+  <div class="card-body">
+    <p style="color:var(--text2); font-size:0.82rem; margin:0 0 14px;">
+      Para cuando el dinero se mueve de una cuenta/persona a otra sin que sea un cobro nuevo
+      ni un pago a proveedor real — ej. "Caja Agente 1 tenía $6,000 en efectivo y los depositó
+      a la cuenta de banco de la agencia". El total del negocio no cambia, solo se mueve de
+      dónde a dónde.
+    </p>
+    <form method="post" action="/corte-caja/traspaso" class="form-grid">
+      <div class="form-field">
+        <label class="field-label">Sale de *</label>
+        <select name="cuenta_origen" class="field-select" required>
+          <option value="">Seleccionar...</option>
+          {% for cta in cuentas_destino %}
+          <option value="{{ cta }}">{{ cta }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Entra a *</label>
+        <select name="cuenta_destino" class="field-select" required>
+          <option value="">Seleccionar...</option>
+          {% for cta in cuentas_destino %}
+          <option value="{{ cta }}">{{ cta }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Monto (MXN) *</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0.01" name="monto" required placeholder="0.00">
+      </div>
+      <div class="form-field">
+        <label class="field-label">Fecha</label>
+        <input class="field-input" type="date" name="fecha" value="{{ today }}">
+      </div>
+      <div class="form-field" style="grid-column: span 2;">
+        <label class="field-label">Motivo (opcional)</label>
+        <input class="field-input" type="text" name="motivo" placeholder="Ej: para pagar el vuelo de la reserva #123">
+      </div>
+      <div class="form-field" style="align-self:flex-end;">
+        <button type="submit" class="btn btn-primary">🔄 Registrar traspaso</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if rol == 'admin' %}
+<!-- Ajuste manual de saldo (solo admin) -->
+<div class="card" style="margin-bottom:20px; border:1px solid var(--warning);">
+  <div class="card-header" style="color:var(--warning);">🛠️ Ajustar saldo de una cuenta (solo administradores)</div>
+  <div class="card-body">
+    <p style="color:var(--text2); font-size:0.82rem; margin:0 0 14px;">
+      Para cuando alguien te da su corte real y no cuadra con lo que el sistema calculó del
+      histórico (movimientos viejos sin clasificar). No se reescribe nada del pasado — se agrega
+      un ajuste con motivo, auditable en Libro Diario como cualquier otro movimiento.
+    </p>
+    <form method="post" action="/corte-caja/ajuste" class="form-grid"
+          onsubmit="return confirm('¿Aplicar este ajuste? Quedará registrado con tu usuario.')">
+      <div class="form-field">
+        <label class="field-label">Cuenta *</label>
+        <select name="cuenta" class="field-select" required>
+          <option value="">Seleccionar...</option>
+          {% for cta in cuentas_destino %}
+          <option value="{{ cta }}">{{ cta }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Tipo *</label>
+        <select name="tipo" class="field-select" required>
+          <option value="sumar">➕ Sumar (tenía más de lo calculado)</option>
+          <option value="restar">➖ Restar (tenía menos de lo calculado)</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="field-label">Monto (MXN) *</label>
+        <input class="field-input field-money" type="number" step="0.01" min="0.01" name="monto" required placeholder="0.00">
+      </div>
+      <div class="form-field" style="grid-column: span 2;">
+        <label class="field-label">Motivo *</label>
+        <input class="field-input" type="text" name="motivo" required placeholder="Ej: corte real dado el 25-sep, no coincidía con el histórico">
+      </div>
+      <div class="form-field" style="grid-column: span 3;">
+        <label style="display:flex; gap:6px; align-items:flex-start; font-size:0.82rem; cursor:pointer;">
+          <input type="checkbox" name="confirmar" value="1" required style="margin-top:2px;">
+          <span>Confirmo que este ajuste es correcto y quedará registrado con mi usuario.</span>
+        </label>
+      </div>
+      <div class="form-field" style="align-self:flex-end;">
+        <button type="submit" class="btn btn-primary" style="background:var(--warning);">🛠️ Aplicar ajuste</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+
+<!-- Últimos traspasos -->
+<div class="card">
+  <div class="card-header">📜 Últimos traspasos y ajustes</div>
+  <div class="card-body" style="padding:0;">
+    {% if traspasos %}
+    <table style="width:100%;">
+      <thead>
+        <tr>
+          <th style="padding-left:20px;">Fecha</th>
+          <th>Movimiento</th>
+          <th>Cuenta</th>
+          <th style="text-align:right;">Monto</th>
+          <th>Estado</th>
+          <th style="padding-right:20px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in traspasos %}
+        <tr {% if t.estado == 'CANCELADO' %}style="opacity:0.4;"{% endif %}>
+          <td style="padding-left:20px; font-size:0.82rem; color:var(--text2); white-space:nowrap;">{{ t.fecha_pago }}</td>
+          <td style="font-size:0.85rem;">
+            {{ '↩️' if t.tipo_movimiento == 'EGRESO' else '↪️' }} {{ t.concepto }}
+          </td>
+          <td style="font-size:0.82rem; color:var(--text2);">{{ t.cuenta_destino or '—' }}</td>
+          <td style="text-align:right; font-weight:600;" class="{{ 'money-negative' if t.tipo_movimiento == 'EGRESO' else 'money-positive' }}">
+            {{ '-' if t.tipo_movimiento == 'EGRESO' else '+' }}${{ '{:,.2f}'.format(t.monto) }}
+          </td>
+          <td>
+            {% if t.estado == 'CANCELADO' %}
+              <span class="badge badge-red" style="font-size:0.65rem;">ANULADO</span>
+            {% else %}
+              <span class="badge badge-green" style="font-size:0.65rem;">ACTIVO</span>
+            {% endif %}
+          </td>
+          <td style="padding-right:20px;">
+            {% if t.estado == 'ACTIVO' and (t.categoria == 'Ajuste de Caja' or t.tipo_movimiento == 'EGRESO') %}
+            <form method="post" action="/corte-caja/traspaso/{{ t.id_movimiento }}/anular"
+                  onsubmit="return confirm('¿Anular este traspaso? Se revierten ambos movimientos ligados.')">
+              <button type="submit" class="btn-icon-danger" title="Anular">✕</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p style="padding:20px; color:var(--text2); font-size:0.875rem;">Sin traspasos registrados todavía.</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

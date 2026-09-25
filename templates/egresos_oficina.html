@@ -105,7 +105,8 @@
         </div>
         <div class="form-field">
           <label class="field-label">Método de pago</label>
-          <select name="metodo_pago" class="field-select">
+          <select name="metodo_pago" class="field-select" id="eg-metodo"
+                  onchange="toggleCuentaDestino('eg-cuenta-destino', this.value)">
             <option value="">—</option>
             {% for m in ['Efectivo','Transferencia','Depósito bancario','Tarjeta de Crédito/Débito'] %}
             <option value="{{ m }}">{{ m }}</option>
@@ -117,9 +118,18 @@
           <input class="field-input" type="date" name="fecha_egreso" value="{{ today }}">
         </div>
         <div class="form-field">
+          <label class="field-label">¿De qué caja/cuenta salió?</label>
+          <select name="cuenta_destino" class="field-select" id="eg-cuenta-destino">
+            <option value="">Sin clasificar</option>
+            {% for cta in cuentas_destino %}
+            <option value="{{ cta }}">{{ cta }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="form-field">
           <label class="field-label">Dividir entre</label>
           <input class="field-input" type="text" name="divisor"
-                 placeholder="Ej: Todas las socias, Carlos...">
+                 placeholder="Ej: Todo el equipo, Dueño...">
         </div>
       </div>
       <button type="submit" class="btn btn-primary" style="margin-top:4px;">💾 Registrar egreso</button>
@@ -137,6 +147,7 @@
         <th>Categoría / Concepto</th>
         <th style="text-align:right;">Monto</th>
         <th>Método</th>
+        <th>Cuenta / caja</th>
         <th>Divide</th>
         <th>Usuario</th>
         <th>Estado</th>
@@ -158,6 +169,7 @@
           <div style="font-size:0.72rem; font-weight:400; color:var(--text2);">MXN</div>
         </td>
         <td style="font-size:0.82rem; color:var(--text2);">{{ r.metodo_pago or '—' }}</td>
+        <td style="font-size:0.78rem; color:{{ 'var(--warning)' if not r.cuenta_destino else 'var(--text2)' }};">{{ r.cuenta_destino or 'Sin clasificar' }}</td>
         <td style="font-size:0.78rem; color:var(--text2);">{{ r.divisor or '—' }}</td>
         <td style="font-size:0.78rem; color:var(--text2);">{{ r.usuario_creador or '—' }}</td>
         <td>
@@ -171,7 +183,7 @@
           {% if r.estado == 'ACTIVO' %}
           <details style="font-size:0.78rem;">
             <summary style="cursor:pointer; color:var(--danger);">Anular</summary>
-            <form method="post" action="/egresos/{{ r.id_egreso }}/anular"
+            <form method="post" action="/egresos/{{ r.id_movimiento }}/anular"
                   style="margin-top:6px; display:flex; gap:6px; align-items:center;">
               <input class="field-input" type="text" name="motivo"
                      placeholder="Motivo..." style="font-size:0.78rem; width:160px;">
@@ -202,5 +214,18 @@
 .kpi-value { font-size:1.7rem; font-weight:700; line-height:1.1; }
 .kpi-sub   { font-size:0.75rem; color:var(--text2); margin-top:4px; }
 </style>
+
+<script>
+const CUENTAS_POR_METODO = {{ cuentas_por_metodo | tojson }};
+function toggleCuentaDestino(selectId, metodo) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const actual = sel.value;
+  const opciones = CUENTAS_POR_METODO[metodo] || CUENTAS_POR_METODO['Transferencia'] || [];
+  sel.innerHTML = '<option value="">Sin clasificar</option>' +
+    opciones.map(o => `<option value="${o}">${o}</option>`).join('');
+  if (opciones.includes(actual)) sel.value = actual;
+}
+</script>
 
 {% endblock %}
