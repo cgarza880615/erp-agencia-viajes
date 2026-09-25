@@ -3521,6 +3521,8 @@ async def detalle_reserva(request: Request, id_reserva: int):
         "semaforo": semaforo,
         "control_caja": control_caja,
         "pagos_prov": _pagos_prov_ctx(id_reserva),
+        "cuentas_destino": CUENTAS_SIMPLE_DEFAULT,
+        "cuentas_por_metodo": CUENTAS_POR_METODO,
         "es_de_grupo": es_de_grupo,
         "nombre_grupo_reserva": nombre_grupo_reserva,
         "today":    str(hoy),

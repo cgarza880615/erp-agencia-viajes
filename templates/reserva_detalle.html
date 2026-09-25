@@ -425,7 +425,8 @@
 {% include "plan_pagos_section.html" %}
 
 <!-- ── Cobros registrados (HTMX) ── -->
-{% with id_reserva=reserva.id_reserva, moneda=reserva.moneda, cobros=ingresos %}
+{% with id_reserva=reserva.id_reserva, moneda=reserva.moneda, cobros=ingresos,
+        cuentas_destino=cuentas_destino, cuentas_por_metodo=cuentas_por_metodo %}
   {% include "cobros_section.html" %}
 {% endwith %}
 
@@ -433,7 +434,8 @@
 {% with id_reserva=reserva.id_reserva, moneda=pagos_prov.moneda, pagos_prov_lista=pagos_prov.pagos_prov_lista,
         categorias_pago_prov=pagos_prov.categorias_pago_prov, today=pagos_prov.today,
         semaforo_prov=pagos_prov.semaforo_prov, costos_prov_map=pagos_prov.costos_prov_map,
-        es_de_grupo=pagos_prov.es_de_grupo, nombre_grupo=pagos_prov.nombre_grupo, id_grupo=pagos_prov.id_grupo %}
+        es_de_grupo=pagos_prov.es_de_grupo, nombre_grupo=pagos_prov.nombre_grupo, id_grupo=pagos_prov.id_grupo,
+        cuentas_destino=pagos_prov.cuentas_destino, cuentas_por_metodo=pagos_prov.cuentas_por_metodo %}
   {% include "pagos_proveedor_section.html" %}
 {% endwith %}
 
