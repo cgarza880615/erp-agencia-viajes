@@ -3565,24 +3565,48 @@ def _col_costo_por_categoria(categoria):
     return "costo_adicionales"
 
 
-def _costos_prorrateados_grupo(id_grupo, num_pax):
+def _offset_pax_grupo(id_grupo, id_reserva):
+    """Cuántos pax de OTRAS reservas del grupo (activas, ordenadas por id_reserva) van
+    antes de esta — define en qué "asientos" del prorrateo cae esta reserva, para que
+    el reparto entre todas las reservas del grupo sume exacto al presupuesto (ver
+    _costos_prorrateados_grupo)."""
+    df_otras = obtener_datos(
+        "SELECT COALESCE(SUM(num_pax),0) as t FROM reservas "
+        "WHERE id_grupo=? AND estado='ACTIVO' AND id_reserva < ?",
+        (id_grupo, id_reserva)
+    )
+    return int(df_otras.iloc[0]["t"]) if not df_otras.empty else 0
+
+
+def _costos_prorrateados_grupo(id_grupo, num_pax, offset_pax=0):
     """Costo prorrateado del presupuesto del grupo para `num_pax` personas, por columna
-    de costo de `reservas`. Solo cálculo — no escribe nada."""
+    de costo de `reservas`. Solo cálculo — no escribe nada.
+
+    Usa distribuir_equitativo() por línea de presupuesto en vez de round(monto/cupos*pax,2)
+    — la fórmula anterior perdía centavos: sumado sobre todas las reservas del grupo, el
+    total repartido no siempre cuadraba con monto_presupuestado. `offset_pax` (vía
+    _offset_pax_grupo) ubica qué "asientos" del reparto le tocan a esta reserva
+    específica, para que sumado entre TODAS las reservas del grupo el total sí cuadre
+    exacto."""
     df_g = obtener_datos("SELECT cupos_bloqueados FROM grupos_viaje WHERE id_grupo=?", (id_grupo,))
     if df_g.empty: return None
     cupos = max(int(df_g.iloc[0]["cupos_bloqueados"]), 1)
     df_p = obtener_datos("SELECT categoria, monto_presupuestado FROM grupo_presupuesto WHERE id_grupo=?", (id_grupo,))
     costos = {"costo_vuelos": 0.0, "costo_tua": 0.0, "costo_hotel": 0.0, "costo_traslados": 0.0, "costo_tours": 0.0, "costo_adicionales": 0.0}
+    ini = max(0, min(offset_pax, cupos))
+    fin = max(0, min(offset_pax + int(num_pax), cupos))
     for _, lp in df_p.iterrows():
         col = _col_costo_por_categoria(lp["categoria"])
-        costos[col] += round(float(lp["monto_presupuestado"]) / cupos * int(num_pax), 2)
+        partes = distribuir_equitativo(float(lp["monto_presupuestado"]), cupos)
+        costos[col] += round(sum(partes[ini:fin]), 2)
     return costos
 
 
 def aplicar_prorrateo_grupo_a_reserva(id_reserva, id_grupo, num_pax):
     """Recalcula los costo_* de una reserva como el prorrateo actual del presupuesto
     del grupo. Acción explícita (nunca automática) — no toca extras_viaje."""
-    costos = _costos_prorrateados_grupo(id_grupo, num_pax)
+    offset_pax = _offset_pax_grupo(id_grupo, id_reserva)
+    costos = _costos_prorrateados_grupo(id_grupo, num_pax, offset_pax)
     if costos is None: return False
     df_v = obtener_datos("SELECT venta_total, costo_comisiones FROM reservas WHERE id_reserva=?", (id_reserva,))
     if df_v.empty: return False
@@ -3705,6 +3729,7 @@ def _presupuesto_grupo_html(request, id_grupo):
     df_p = obtener_datos("SELECT id_presupuesto, categoria, descripcion, monto_presupuestado FROM grupo_presupuesto WHERE id_grupo=? ORDER BY id_presupuesto", (id_grupo,))
     df_pag = obtener_datos("SELECT id_presupuesto, COALESCE(SUM(monto),0) as pagado FROM flujo_caja WHERE id_grupo=? AND estado='ACTIVO' AND tipo_movimiento='EGRESO' GROUP BY id_presupuesto", (id_grupo,))
     pagado_map = {int(r["id_presupuesto"]): float(r["pagado"]) for _, r in df_pag.iterrows()} if not df_pag.empty else {}
+    desc_map = {int(r["id_presupuesto"]): f"{r['categoria']} — {r['descripcion'] or 's/desc'}" for _, r in df_p.iterrows()}
     lineas = []
     for _, r in df_p.iterrows():
         pagado = pagado_map.get(int(r["id_presupuesto"]), 0.0)
@@ -3713,9 +3738,26 @@ def _presupuesto_grupo_html(request, id_grupo):
         d["pendiente"] = round(float(r["monto_presupuestado"]) - pagado, 2)
         d["tiene_pagos"] = pagado > 0
         lineas.append(d)
+
+    # Pagos a proveedor ya registrados para este grupo — con acción de anular, para
+    # poder corregir una captura equivocada (línea/monto/método) sin tocar la BD a mano.
+    # Antes esto no existía: la única acción disponible era borrar la LÍNEA de presupuesto,
+    # bloqueada mientras tuviera pagos — dejaba a la usuaria sin forma de corregir un error
+    # de captura.
+    df_pagos = obtener_datos(
+        "SELECT id_movimiento, id_presupuesto, monto, metodo_pago, fecha_pago, estado, motivo_anulacion "
+        "FROM flujo_caja WHERE id_grupo=? AND tipo_movimiento='EGRESO' ORDER BY id_movimiento DESC",
+        (id_grupo,)
+    )
+    pagos = []
+    for _, r in df_pagos.iterrows():
+        d = r.to_dict()
+        d["linea_desc"] = desc_map.get(int(r["id_presupuesto"]), "Línea eliminada") if pd.notna(r["id_presupuesto"]) else "—"
+        pagos.append(d)
+
     return templates.TemplateResponse(request, "presupuesto_grupo_section.html", {
-        "request": request, "id_grupo": id_grupo, "lineas": lineas,
-        "categorias": ["Vuelos", "Hotel", "TUA", "Traslados", "Tours", "Publicidad", "Guías", "Propinas", "Otro"],
+        "request": request, "id_grupo": id_grupo, "lineas": lineas, "pagos": pagos,
+        "categorias": ["Vuelos", "Hotel", "TUA", "Traslados", "Tours", "Publicidad", "Guías", "Propinas", "Viáticos de Grupo", "Otro"],
     })
 
 
@@ -3933,7 +3975,7 @@ async def grupo_pago_proveedor(request: Request, id_grupo: int):
     form = await request.form()
     usuario = usuario_activo(request)
     id_presupuesto = int(form.get("id_presupuesto") or 0)
-    monto = float(form.get("monto") or 0)
+    monto = round(float(form.get("monto") or 0), 2)
     if id_presupuesto and monto > 0:
         df_p = obtener_datos("SELECT categoria FROM grupo_presupuesto WHERE id_presupuesto=?", (id_presupuesto,))
         df_g = obtener_datos("SELECT nombre_grupo, moneda FROM grupos_viaje WHERE id_grupo=?", (id_grupo,))
@@ -3946,6 +3988,40 @@ async def grupo_pago_proveedor(request: Request, id_grupo: int):
             (id_grupo, id_presupuesto, f"Pago de {categoria} (Grupo)", f"[{metodo}] Pago proveedor grupo — {nombre_grupo}", monto, moneda, str(now_local().date()), usuario, str(now_local().date()), metodo)
         )
     return RedirectResponse(url=f"/grupos/{id_grupo}", status_code=303)
+
+
+@app.post("/grupos/{id_grupo}/pago-proveedor/{id_movimiento}/anular", response_class=HTMLResponse)
+async def grupo_pago_proveedor_anular(request: Request, id_grupo: int, id_movimiento: int):
+    if not usuario_activo(request):
+        return HTMLResponse("", status_code=401)
+    form = await request.form()
+    motivo = (form.get("motivo") or "").strip()
+    usuario = usuario_activo(request)
+    if not motivo:
+        return _presupuesto_grupo_html(request, id_grupo)
+
+    df_mov = obtener_datos(
+        "SELECT id_movimiento, monto, concepto, estado FROM flujo_caja "
+        "WHERE id_movimiento=? AND id_grupo=? AND tipo_movimiento='EGRESO'",
+        (id_movimiento, id_grupo)
+    )
+    # Candado: si ya está cancelado (doble clic/doble submit) o no pertenece a este
+    # grupo, no se vuelve a correr nada — igual que anular_cobro().
+    if df_mov.empty or df_mov.iloc[0]["estado"] != "ACTIVO":
+        return _presupuesto_grupo_html(request, id_grupo)
+
+    monto_mov = round(float(df_mov.iloc[0]["monto"] or 0), 2)
+    concepto_mov = str(df_mov.iloc[0]["concepto"] or "")
+
+    ejecutar_comando(
+        "UPDATE flujo_caja SET estado='CANCELADO', motivo_anulacion=? WHERE id_movimiento=?",
+        (motivo, id_movimiento)
+    )
+    ejecutar_comando(
+        "INSERT INTO anulaciones_audit (id_movimiento, tipo_movimiento, monto_anulado, usuario_anulo, fecha_anulacion, razon_anulacion, movimiento_original) VALUES (?,?,?,?,?,?,?)",
+        (id_movimiento, "EGRESO", monto_mov, usuario, str(now_local().date()), motivo, concepto_mov)
+    )
+    return _presupuesto_grupo_html(request, id_grupo)
 
 
 @app.post("/grupos/{id_grupo}/vincular")

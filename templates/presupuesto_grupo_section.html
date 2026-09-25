@@ -30,6 +30,37 @@
     <p style="color:var(--text2); font-size:0.875rem; margin-bottom:16px;">Sin líneas de presupuesto todavía.</p>
     {% endif %}
 
+    {% if pagos %}
+    <details style="margin-bottom:16px;">
+      <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
+        📋 Pagos a proveedor registrados ({{ pagos | selectattr('estado', 'equalto', 'ACTIVO') | list | length }})
+      </summary>
+      <table style="width:100%; margin-top:10px;">
+        <thead>
+          <tr><th>Línea</th><th>Monto</th><th>Método</th><th>Fecha</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for p in pagos %}
+          <tr {% if p.estado != 'ACTIVO' %}style="opacity:0.45;"{% endif %}>
+            <td>{{ p.linea_desc }}</td>
+            <td class="money">{{ p.monto | moneda }}</td>
+            <td>{{ p.metodo_pago or '—' }}</td>
+            <td>{{ p.fecha_pago }}</td>
+            <td>
+              {% if p.estado == 'ACTIVO' %}
+              <button type="button" class="btn-icon-danger" style="font-size:0.78rem;"
+                      onclick="abrirAnularPago({{ p.id_movimiento }})">🚫 Anular</button>
+              {% else %}
+              <span style="font-size:0.78rem; color:var(--text2);" title="{{ p.motivo_anulacion or '' }}">Anulado</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </details>
+    {% endif %}
+
     <details style="margin-bottom:16px;">
       <summary style="cursor:pointer; font-weight:600; color:var(--primary); padding:6px 0; font-size:0.875rem;">
         + Agregar línea de presupuesto
@@ -114,5 +145,33 @@ function eliminarPresupuesto() {
   const url = `/grupos/${_idGrupoPresupuesto}/presupuesto/${idPresupuesto}/eliminar`;
   htmx.ajax('POST', url, {target: '#seccion-presupuesto-grupo', swap: 'outerHTML'});
   document.getElementById('modal-presupuesto').style.display = 'none';
+}
+</script>
+
+<!-- Modal anular pago a proveedor -->
+<div id="modal-anular-pago-grupo" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:28px 32px; width:420px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.25);">
+    <h3 style="margin:0 0 16px; color:var(--danger); font-size:1rem;">🚫 Anular pago a proveedor</h3>
+    <form id="form-anular-pago-grupo" method="post" action="#" hx-target="#seccion-presupuesto-grupo" hx-swap="outerHTML">
+      <div class="form-field">
+        <label class="field-label">Motivo de anulación</label>
+        <input class="field-input" type="text" name="motivo" required placeholder="Ej: captura duplicada, línea equivocada...">
+      </div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button type="submit" class="btn" style="background:var(--danger); color:white; font-size:0.875rem;">🚫 Anular</button>
+        <button type="button" class="btn btn-outline" style="font-size:0.875rem;" onclick="document.getElementById('modal-anular-pago-grupo').style.display='none'">Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function abrirAnularPago(idMovimiento) {
+  const form = document.getElementById('form-anular-pago-grupo');
+  const url = `/grupos/${_idGrupoPresupuesto}/pago-proveedor/${idMovimiento}/anular`;
+  form.setAttribute('hx-post', url);
+  form.setAttribute('action', url);
+  htmx.process(form);
+  document.getElementById('modal-anular-pago-grupo').style.display = 'flex';
 }
 </script>
