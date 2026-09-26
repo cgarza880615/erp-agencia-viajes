@@ -90,9 +90,12 @@
                   </p>
                   <form method="post" action="/admin/usuarios/{{ u.usuario }}/password"
                         style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <input class="field-input" type="password" name="password"
-                           placeholder="Nueva contraseña" required
-                           style="width:200px; font-size:0.82rem;">
+                    <div style="position:relative;">
+                      <input class="field-input" type="password" name="password"
+                             placeholder="Nueva contraseña" required
+                             style="width:200px; font-size:0.82rem; padding-right:34px;">
+                      <button type="button" onclick="togglePwd(this)" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:0.9rem;">👁️</button>
+                    </div>
                     <button type="submit" class="btn btn-primary"
                             style="font-size:0.78rem; padding:4px 10px; background:var(--warning);">
                       Restablecer
@@ -198,8 +201,11 @@
           </div>
           <div class="form-field">
             <label class="field-label">Contraseña temporal *</label>
-            <input class="field-input" type="password" name="password" required
-                   placeholder="Mín. 8 · 1 mayúscula · 1 símbolo">
+            <div style="position:relative;">
+              <input class="field-input" type="password" name="password" required
+                     placeholder="Mín. 8 · 1 mayúscula · 1 símbolo" style="padding-right:38px;">
+              <button type="button" onclick="togglePwd(this)" style="position:absolute; right:6px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; font-size:1rem;">👁️</button>
+            </div>
           </div>
         </div>
         <button type="submit" class="btn btn-primary" style="margin-top:4px;">
