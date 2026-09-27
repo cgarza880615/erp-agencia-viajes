@@ -104,6 +104,16 @@
                 </div>
               </details>
 
+              <!-- Desbloquear login (quita el bloqueo por intentos fallidos) -->
+              <form method="post" action="/admin/usuarios/{{ u.usuario }}/desbloquear-login"
+                    style="display:inline;">
+                <button type="submit" class="btn btn-outline"
+                        style="font-size:0.78rem; padding:3px 8px; color:var(--primary); border-color:var(--primary);"
+                        title="Quitar el bloqueo de 15 minutos por intentos fallidos, para que pueda intentar de nuevo ya">
+                  🔓 Desbloquear login
+                </button>
+              </form>
+
               <!-- Forzar cambio de contraseña en próximo login -->
               {% if u.usuario != usuario %}
               <form method="post" action="/admin/usuarios/{{ u.usuario }}/forzar-login"

@@ -5665,6 +5665,16 @@ async def admin_reset_password(request: Request, target: str):
     return RedirectResponse(url="/admin?tab=usuarios", status_code=303)
 
 
+@app.post("/admin/usuarios/{target}/desbloquear-login", response_class=HTMLResponse)
+async def admin_desbloquear_login(request: Request, target: str):
+    redir = _require_admin(request)
+    if redir: return redir
+
+    limpiar_intentos_login(target)
+    request.session["flash"] = {"tipo": "ok", "texto": f"🔓 Bloqueo de login de '{target}' eliminado. Ya puede intentar de nuevo."}
+    return RedirectResponse(url="/admin?tab=usuarios", status_code=303)
+
+
 @app.post("/admin/usuarios/{target}/eliminar", response_class=HTMLResponse)
 async def admin_eliminar_usuario(request: Request, target: str):
     redir = _require_admin(request)
